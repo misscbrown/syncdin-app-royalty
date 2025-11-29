@@ -7,6 +7,13 @@ import Navigation from "@/components/Navigation";
 import Home from "@/pages/Home";
 import About from "@/pages/About";
 import Dashboard from "@/pages/Dashboard";
+import UploadTracks from "@/pages/UploadTracks";
+import RoyaltyStatements from "@/pages/RoyaltyStatements";
+import MetadataMatching from "@/pages/MetadataMatching";
+import MissingRoyalties from "@/pages/MissingRoyalties";
+import PlaybackAnalytics from "./pages/PlaybackAnalytics";
+import ReportsExports from "./pages/ReportsExports";
+import Settings from "./pages/Settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {

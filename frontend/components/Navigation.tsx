@@ -3,7 +3,14 @@ import { Link, useLocation } from "wouter";
 const navItems = [
   { path: "/", label: "Home" },
   { path: "/about", label: "About" },
-  { path: "/dashboard", label: "Dashboard" },
+  { path: "/dashboard", label: "Dashboard"},
+  { path: "/upload-tracks", label: "Upload Tracks" },
+  { path: "/royalty-statements", label: "Royalty Statements" },
+  { path: "/metadata-matching", label: "Metadata Matching" },
+  { path: "/missing-royalties", label: "Missing Royalties" },
+  { path: "/playback-analytics", label: "Playback Analytics" },
+  { path: "/reports-exports", label: "Reports & Exports" },
+  { path: "/settings", label: "Settings" },
 ];
 
 export default function Navigation() {

@@ -25,7 +25,7 @@ export default function ChartCard({
 }: ChartCardProps) {
   return (
     <Card 
-      className={`${cardColor} border-border transition-all duration-200`}
+      className={`${cardColor} border-border transition-all duration-200 hover:border-purple-bold/40 hover:shadow-lg hover:shadow-purple-bold/5`}
       data-testid={`chart-${title.toLowerCase().replace(/\s+/g, '-')}`}
     >
       <CardHeader className="pb-2">

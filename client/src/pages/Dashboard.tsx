@@ -23,7 +23,7 @@ import {
   Cell,
 } from "recharts";
 
-const CHART_COLORS = ["hsl(141, 76%, 48%)", "hsl(173, 80%, 55%)", "hsl(280, 85%, 65%)", "hsl(43, 96%, 58%)"];
+const CHART_COLORS = ["hsl(141, 76%, 48%)", "hsl(270, 85%, 60%)", "hsl(200, 50%, 50%)", "hsl(43, 96%, 58%)", "hsl(0, 85%, 60%)"];
 
 export default function Dashboard() {
   const [metrics, setMetrics] = useState<FormattedMetric[]>([]);
@@ -147,9 +147,10 @@ export default function Dashboard() {
                   <Line 
                     type="monotone" 
                     dataKey="actual" 
-                    stroke="hsl(173, 80%, 55%)" 
+                    stroke="hsl(270, 85%, 60%)" 
                     strokeWidth={2} 
-                    dot={{ r: 4, fill: "hsl(173, 80%, 55%)" }}
+                    dot={{ r: 4, fill: "hsl(270, 85%, 60%)" }}
+                    className="neon-glow"
                   />
                 </LineChart>
               </ResponsiveContainer>

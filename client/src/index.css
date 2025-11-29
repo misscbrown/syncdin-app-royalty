@@ -33,15 +33,21 @@
   --muted-foreground: 0 0% 70%;
   --accent: 141 30% 15%;
   --accent-foreground: 141 76% 48%;
+  --purple: 270 85% 60%;
+  --purple-foreground: 0 0% 100%;
+  --blue: 200 50% 50%;
+  --blue-foreground: 0 0% 100%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
   --input: 0 0% 20%;
   --ring: 141 76% 48%;
   --chart-1: 141 76% 48%;
-  --chart-2: 173 80% 55%;
-  --chart-3: 280 85% 65%;
+  --chart-2: 270 85% 60%;
+  --chart-3: 200 70% 55%;
   --chart-4: 43 96% 58%;
   --chart-5: 0 85% 60%;
+  --purple-bold: 270 85% 60%;
+  --blue-subtle: 200 50% 50%;
   --font-sans: Inter, system-ui, sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
@@ -163,5 +169,24 @@
   .chart-neon path,
   .chart-neon line {
     filter: drop-shadow(0 0 3px hsl(var(--chart-1) / 0.5));
+  }
+
+  /* Purple and blue accent styles */
+  .text-purple-bold {
+    color: hsl(270, 85%, 60%);
+  }
+
+  .text-blue-subtle {
+    color: hsl(200, 50%, 50%);
+  }
+
+  .bg-purple-accent {
+    background-color: hsl(270, 85%, 60% / 0.1);
+    border-color: hsl(270, 85%, 60% / 0.3);
+  }
+
+  .bg-blue-accent {
+    background-color: hsl(200, 50%, 50% / 0.1);
+    border-color: hsl(200, 50%, 50% / 0.3);
   }
 }

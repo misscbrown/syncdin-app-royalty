@@ -37,8 +37,8 @@ export default function MetricCard({
 
   return (
     <Card 
-      className={`${cardColor} border-border transition-all duration-300 hover:bg-muted/30 ${
-        isFlagged ? "bg-accent/20" : ""
+      className={`${cardColor} border-border transition-all duration-300 hover:bg-muted/30 hover:border-blue-subtle/30 ${
+        isFlagged ? "bg-purple-accent border-purple-bold/40" : ""
       }`}
       data-testid={`card-metric-${title.toLowerCase().replace(/\s+/g, '-')}`}
     >

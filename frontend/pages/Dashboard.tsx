@@ -16,19 +16,19 @@ const Dashboard: React.FC = () => {
   ];
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 p-4">
+      <aside className="w-64 bg-[var(--sidebar)] text-[var(--sidebar-foreground)] border-r border-[var(--sidebar-border)] p-4">
         <h2 className="text-xl font-bold mb-6">Dashboard Menu</h2>
         <nav className="flex flex-col gap-3">
-          <Link href="/" className="hover:text-blue-600">Dashboard</Link>
-          <Link href="/upload-tracks" className="hover:text-blue-600">Upload Tracks</Link>
-          <Link href="/royalty-statements" className="hover:text-blue-600">Royalty Statements</Link>
-          <Link href="/metadata-matching" className="hover:text-blue-600">Metadata Matching</Link>
-          <Link href="/missing-royalties" className="hover:text-blue-600">Missing Royalties</Link>
-          <Link href="/playback-analytics" className="hover:text-blue-600">Playback Analytics</Link>
-          <Link href="/reports-exports" className="hover:text-blue-600">Reports & Exports</Link>
-          <Link href="/settings" className="hover:text-blue-600">Settings</Link>
+          <Link href="/" className="hover:text-[var(--primary)]">Dashboard</Link>
+          <Link href="/upload-tracks" className="hover:text-[var(--primary)]">Upload Tracks</Link>
+          <Link href="/royalty-statements" className="hover:text-[var(--primary)]">Royalty Statements</Link>
+          <Link href="/metadata-matching" className="hover:text-[var(--primary)]">Metadata Matching</Link>
+          <Link href="/missing-royalties" className="hover:text-[var(--primary)]">Missing Royalties</Link>
+          <Link href="/playback-analytics" className="hover:text-[var(--primary)]">Playback Analytics</Link>
+          <Link href="/reports-exports" className="hover:text-[var(--primary)]">Reports & Exports</Link>
+          <Link href="/settings" className="hover:text-[var(--primary)]">Settings</Link>
         </nav>
       </aside>
 
@@ -44,19 +44,26 @@ const Dashboard: React.FC = () => {
           {/* Metrics Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {metrics.map((metric) => (
-              <MetricCard key={metric.title} title={metric.title} value={metric.value} />
+              <MetricCard 
+                key={metric.title} 
+                title={metric.title} 
+                value={metric.value} 
+                cardColor="var(--card)" 
+                textColor="var(--card-foreground)" 
+              />
             ))}
           </div>
 
           {/* Charts / Tables */}
           <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            <ChartCard title="Playback Frequency" />
-            <ChartCard title="Missing Metadata Stats" />
-            <ChartCard title="Royalty Gap Estimation" />
+            <ChartCard title="Playback Frequency" color="var(--chart-1)" />
+            <ChartCard title="Missing Metadata Stats" color="var(--chart-2)" />
+            <ChartCard title="Royalty Gap Estimation" color="var(--chart-3)" />
           </div>
         </main>
       </div>
     </div>
+
   );
 };
 

@@ -2,18 +2,18 @@ import React from "react";
 
 interface ChartCardProps {
   title: string;
-  children?: React.ReactNode;
+  data?: number[];
+  color?: string;
 }
 
-const ChartCard: React.FC<ChartCardProps> = ({ title, children }) => {
+export default function ChartCard({ title, data = [], color = "var(--chart-1)" }: ChartCardProps) {
   return (
-    <div className="bg-white p-4 rounded-lg shadow">
-      <h3 className="text-sm font-medium text-gray-500 mb-2">{title}</h3>
-      <div className="h-48 flex items-center justify-center text-gray-400">
-        {children || "Chart / Table Placeholder"}
+    <div className="p-4 rounded-lg shadow-md" style={{ backgroundColor: "var(--card)" }}>
+      <h3 className="text-lg font-medium mb-2" style={{ color: "var(--card-foreground)" }}>{title}</h3>
+      <div className="h-40">
+        {/* Chart.js / Recharts */}
+        {/* Use color prop for chart lines */}
       </div>
     </div>
   );
-};
-
-export default ChartCard;
+}

@@ -3,15 +3,16 @@ import React from "react";
 interface MetricCardProps {
   title: string;
   value: string | number;
+  cardColor?: string;
+  textColor?: string;
 }
 
-const MetricCard: React.FC<MetricCardProps> = ({ title, value }) => {
+export default function MetricCard({ title, value, cardColor, textColor }: MetricCardProps) {
   return (
-    <div className="bg-white p-4 rounded-lg shadow hover:shadow-md transition">
-      <h3 className="text-sm font-medium text-gray-500">{title}</h3>
-      <p className="mt-2 text-2xl font-semibold text-gray-900">{value}</p>
+    <div className="p-4 rounded-lg shadow-md" style={{ backgroundColor: cardColor, color: textColor }}>
+      <h2 className="text-lg font-medium">{title}</h2>
+      <p className="text-2xl font-bold mt-2">{value}</p>
     </div>
   );
-};
+}
 
-export default MetricCard;

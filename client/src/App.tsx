@@ -7,7 +7,7 @@ import Navigation from "@/components/Navigation";
 import Home from "@/pages/Home";
 import About from "@/pages/About";
 import Dashboard from "@/pages/Dashboard";
-import UploadTracks from "@/pages/UploadTracks";
+import UploadTracks from "@/pages/UploadTracks"
 import RoyaltyStatements from "@/pages/RoyaltyStatements";
 import MetadataMatching from "@/pages/MetadataMatching";
 import MissingRoyalties from "@/pages/MissingRoyalties";
@@ -22,6 +22,13 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/about" component={About} />
       <Route path="/dashboard" component={Dashboard} />
+      <Route path="/upload-tracks" component={UploadTracks} />
+      <Route path="/royalty-statements" component={RoyaltyStatements} />
+      <Route path="/metadata-matching" component={MetadataMatching} />
+      <Route path="/missing-royalties" component={MissingRoyalties} />
+      <Route path="/playback-analytics" component={PlaybackAnalytics} />
+      <Route path="/reports-exports" component={ReportsExports} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );

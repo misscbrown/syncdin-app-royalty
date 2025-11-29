@@ -1,0 +1,35 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "name": "John Doe",
+      "email": "john@example.com",
+      "role": "admin"
+    },
+    {
+      "id": "2",
+      "name": "Jane Smith",
+      "email": "jane@example.com",
+      "role": "user"
+    }
+  ],
+  "items": [
+    {
+      "id": "1",
+      "title": "Sample Item 1",
+      "description": "This is a sample item description",
+      "status": "active"
+    },
+    {
+      "id": "2",
+      "title": "Sample Item 2",
+      "description": "Another sample item description",
+      "status": "pending"
+    }
+  ],
+  "settings": {
+    "appName": "My Application",
+    "version": "1.0.0",
+    "theme": "light"
+  }
+}

@@ -1,0 +1,24 @@
+/* 
+ * Global Styles
+ * This file can be used for additional custom styles
+ * The main styles are handled by TailwindCSS in client/src/index.css
+ */
+
+/* Custom animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Page transitions */
+.page-transition {
+  animation: fadeIn 0.2s ease-out;
+}

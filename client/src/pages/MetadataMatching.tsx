@@ -197,7 +197,7 @@ export default function MetadataMatching() {
             <Card className="bg-card border-border">
               <CardHeader>
                 <CardTitle className="text-base font-semibold text-foreground">
-                  Fixes mismatches
+                  Fix mismatches
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">

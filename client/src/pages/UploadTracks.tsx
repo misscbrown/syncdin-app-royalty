@@ -152,7 +152,7 @@ export default function UploadTracks() {
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-base font-semibold text-foreground">
-              User sees:
+              Files:
             </CardTitle>
           </CardHeader>
           <CardContent>

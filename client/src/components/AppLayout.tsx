@@ -19,7 +19,7 @@ const sidebarItems = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
   { path: "/upload-tracks", label: "Upload Files", icon: Upload },
   { path: "/royalty-statements", label: "Royalty Statements", icon: FileText },
-  { path: "/metadata-matching", label: "Metadata Matching", icon: GitCompare },
+  { path: "/metadata-matching", label: "Metadata & Matching", icon: GitCompare },
   { path: "/missing-royalties", label: "Missing Royalties", icon: AlertCircle },
   { path: "/playback-analytics", label: "Playback Analytics", icon: BarChart3 },
   { path: "/reports-exports", label: "Reports & Exports", icon: FileDown },

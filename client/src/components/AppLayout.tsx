@@ -17,7 +17,7 @@ interface AppLayoutProps {
 
 const sidebarItems = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/upload-tracks", label: "Upload Tracks", icon: Upload },
+  { path: "/upload-tracks", label: "Upload Files", icon: Upload },
   { path: "/royalty-statements", label: "Royalty Statements", icon: FileText },
   { path: "/metadata-matching", label: "Metadata Matching", icon: GitCompare },
   { path: "/missing-royalties", label: "Missing Royalties", icon: AlertCircle },

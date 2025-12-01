@@ -10,7 +10,6 @@ import Dashboard from "@/pages/Dashboard";
 import UploadTracks from "@/pages/UploadTracks"
 import RoyaltyStatements from "@/pages/RoyaltyStatements";
 import MetadataMatching from "@/pages/MetadataMatching";
-import MissingRoyalties from "@/pages/MissingRoyalties";
 import PlaybackAnalytics from "./pages/PlaybackAnalytics";
 import ReportsExports from "./pages/ReportsExports";
 import Settings from "./pages/Settings";
@@ -25,7 +24,6 @@ function Router() {
       <Route path="/upload-tracks" component={UploadTracks} />
       <Route path="/royalty-statements" component={RoyaltyStatements} />
       <Route path="/metadata-matching" component={MetadataMatching} />
-      <Route path="/missing-royalties" component={MissingRoyalties} />
       <Route path="/playback-analytics" component={PlaybackAnalytics} />
       <Route path="/reports-exports" component={ReportsExports} />
       <Route path="/settings" component={Settings} />

@@ -135,7 +135,7 @@ export default function PlaybackAnalytics() {
             Playback Analytics
           </h1>
           <p className="text-muted-foreground mt-1">
-            Historical streams and usage derived from MLC data
+            Streams and usage 
           </p>
         </div>
 

@@ -8,10 +8,6 @@ import {
   FileSpreadsheet,
   FileText,
   Calendar,
-  TrendingUp,
-  DollarSign,
-  CheckCircle2,
-  AlertCircle,
 } from "lucide-react";
 import MetricCard from "@/components/MetricCard";
 import ChartCard from "@/components/ChartCard";
@@ -27,14 +23,6 @@ import {
   LineChart,
   Line,
 } from "recharts";
-
-interface RecoveryItem {
-  id: string;
-  category: string;
-  tracksAffected: number;
-  recoveryAmount: number;
-  status: "in_progress" | "pending" | "recovered";
-}
 
 const reportTypes = [
   {
@@ -67,12 +55,6 @@ const recentExports = [
   { id: 1, name: "Royalty_Report_Nov2024.xlsx", date: "2024-11-20", size: "2.4 MB" },
   { id: 2, name: "Streaming_Report_Q3.pdf", date: "2024-10-15", size: "1.8 MB" },
   { id: 3, name: "Annual_Summary_2024.xlsx", date: "2024-10-01", size: "4.2 MB" },
-];
-
-const recoveryItems: RecoveryItem[] = [
-  { id: "1", category: "MLC Black Box", tracksAffected: 1240, recoveryAmount: 15600, status: "in_progress" },
-  { id: "2", category: "Unregistered Tracks", tracksAffected: 340, recoveryAmount: 8420, status: "pending" },
-  { id: "3", category: "Metadata Mismatches", tracksAffected: 560, recoveryAmount: 11230, status: "recovered" },
 ];
 
 const comparisonData = [
@@ -113,35 +95,6 @@ const distributorComparison = [
 export default function ReportsExports() {
   const [activeTab, setActiveTab] = useState("reports");
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "recovered":
-        return "text-primary bg-primary/10";
-      case "in_progress":
-        return "text-yellow-500 bg-yellow-500/10";
-      case "pending":
-        return "text-destructive bg-destructive/10";
-      default:
-        return "text-muted-foreground bg-muted/10";
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "recovered":
-        return <CheckCircle2 className="w-4 h-4" />;
-      case "in_progress":
-        return <TrendingUp className="w-4 h-4" />;
-      case "pending":
-        return <AlertCircle className="w-4 h-4" />;
-      default:
-        return null;
-    }
-  };
-
-  const totalRecoveryAmount = recoveryItems.reduce((sum, item) => sum + item.recoveryAmount, 0);
-  const totalTracksAffected = recoveryItems.reduce((sum, item) => sum + item.tracksAffected, 0);
-
   return (
     <AppLayout>
       <div className="space-y-6" data-testid="page-reports-exports">
@@ -153,12 +106,9 @@ export default function ReportsExports() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-card border border-border" data-testid="tabs-reports">
+          <TabsList className="grid w-full grid-cols-2 bg-card border border-border" data-testid="tabs-reports">
             <TabsTrigger value="reports" data-testid="tab-reports">
               Reports
-            </TabsTrigger>
-            <TabsTrigger value="recovery" data-testid="tab-recovery">
-              Royalty Recovery
             </TabsTrigger>
             <TabsTrigger value="comparison" data-testid="tab-comparison">
               MLC vs Distributor
@@ -225,74 +175,6 @@ export default function ReportsExports() {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          {/* Royalty Recovery Tab */}
-          <TabsContent value="recovery" className="space-y-6 mt-6">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <MetricCard
-                title="Total Recoverable"
-                value={`$${totalRecoveryAmount.toLocaleString()}`}
-                trend="up"
-                trendValue="Pending"
-              />
-              <MetricCard
-                title="Tracks Affected"
-                value={totalTracksAffected.toLocaleString()}
-              />
-              <MetricCard
-                title="In Progress"
-                value={`${recoveryItems.filter((r) => r.status === "in_progress").length} items`}
-              />
-            </div>
-
-            <div className="space-y-3">
-              {recoveryItems.map((item) => (
-                <Card
-                  key={item.id}
-                  className="bg-card border-border hover:border-primary/40 transition-colors"
-                  data-testid={`card-recovery-${item.id}`}
-                >
-                  <CardContent className="py-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-start gap-4 flex-1">
-                        <div
-                          className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${getStatusColor(
-                            item.status
-                          )}`}
-                        >
-                          {getStatusIcon(item.status)}
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-foreground">{item.category}</h3>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {item.tracksAffected.toLocaleString()} tracks affected
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">Recoverable Amount</p>
-                        <p className="text-xl font-bold text-primary">${item.recoveryAmount.toLocaleString()}</p>
-                        <span className={`inline-block text-xs px-2 py-1 rounded-full mt-2 ${getStatusColor(
-                          item.status
-                        )}`}>
-                          {item.status === "in_progress"
-                            ? "In Progress"
-                            : item.status === "recovered"
-                              ? "Recovered"
-                              : "Pending"}
-                        </span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            <Button className="w-full" data-testid="button-start-recovery">
-              <TrendingUp className="w-4 h-4 mr-2" />
-              Start Recovery Process
-            </Button>
           </TabsContent>
 
           {/* MLC vs Distributor Tab */}

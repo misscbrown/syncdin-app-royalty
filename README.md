@@ -1,9 +1,9 @@
-**Syncdin – Royalty Intelligence & Metadata Reconciliation Platform**
+# **Syncdin – Royalty Intelligence & Metadata Reconciliation Platform**
 
 A modern music-tech system for uncovering missing royalties, matching metadata, and unifying royalty data across fragmented sources.
 
 
-🚀 **Overview**
+## 🚀 **Overview**
 
 Syncdin is a music royalty intelligence platform designed to help artists, publishers, and rights holders recover lost income by analysing metadata, royalty statements, and streaming data.
 
@@ -22,7 +22,7 @@ Cross-platform metadata consistency
 Syncdin is being developed sprint-by-sprint in Replit with a long-term vision of pulling data from distributors, DSPs, and public sources to provide a complete financial picture for creators.
 
 
-✔️ **Current MVP Functionality (Sprints 1–3)**
+## ✔️ **Current MVP Functionality (Sprints 1–3)**
 🎨 UI / Dashboard
 
 Spotify-inspired dark theme
@@ -44,7 +44,7 @@ New matches
 Charts for playback, royalty gaps, metadata health
 
 
-📁 **File Ingestion**
+## 📁 **File Ingestion**
 
 CSV uploader
 
@@ -67,7 +67,7 @@ Revenue
 Stores data in local mock database
 
 
-🧩 **Metadata Matching**
+## 🧩 **Metadata Matching**
 
 Page to view unmatched / partially matched metadata
 
@@ -86,7 +86,7 @@ Title variations
 Fuzzy matching
 
 
-💸 **Missing Royalty Detection**
+## 💸 **Missing Royalty Detection**
 
 Identifies tracks with:
 
@@ -97,7 +97,7 @@ Zero-revenue anomalies
 Play-count inconsistencies
 
 
-📊 **Playback Analytics**
+## 📊 **Playback Analytics**
 
 Stream trends
 
@@ -108,7 +108,7 @@ Active tracks
 Monthly averages
 
 
-📑 **Reports & Exports**
+## 📑 **Reports & Exports**
 
 Royalty report
 
@@ -121,7 +121,7 @@ Financial summary
 Export history list
 
 
-⚙️ **Settings**
+## ⚙️ **Settings**
 
 Profile
 
@@ -132,7 +132,7 @@ Appearance
 Security
 
 
-🛠️ **Tech Stack**
+## 🛠️ **Tech Stack**
 
 React + TypeScript
 
@@ -145,8 +145,8 @@ Replit + GitHub for dev workflow
 CSV parsing using Papaparse / custom utilities
 
 
-🧭 **Product Roadmap**
-Sprint 4: Metadata Extraction (APIs)
+## 🧭 **Product Roadmap**
+**Sprint 4: Metadata Extraction (APIs)**
 
 Spotify API (ISRC, ISWC, titles, aliases)
 
@@ -154,7 +154,7 @@ Genius / MusicBrainz metadata enrichment
 
 Record of truth: build structured metadata dataset
 
-Sprint 5: Royalty Comparison Engine
+**Sprint 5: Royalty Comparison Engine**
 
 Compare distributor files vs enriched metadata
 
@@ -168,7 +168,7 @@ Unallocated royalties
 
 Inconsistent reporting across pay sources
 
-Sprint 6: Audio Fingerprinting (Optional)
+**Sprint 6: Audio Fingerprinting (Optional)**
 
 Integration with ACRCloud for track identification
 
@@ -178,7 +178,7 @@ Match metadata from audio file
 
 Automate correction of missing identifiers
 
-Sprint 7: DSP + Rights Organisation Integrations
+**Sprint 7: DSP + Rights Organisation Integrations**
 
 MLC API
 
@@ -188,7 +188,7 @@ TikTok / Meta rights endpoints
 
 Radio tracking providers (Radiomonitor, BMAT if allowed)
 
-Sprint 8: Royalty Intelligence Engine
+**Sprint 8: Royalty Intelligence Engine**
 
 Cross-source royalty reconciliation
 
@@ -199,7 +199,7 @@ Forecasting payouts
 Alerting system for anomalies
 
 
-🔮 **Long-Term Vision**
+## 🔮 **Long-Term Vision**
 
 Build the centralised rights, metadata, and royalty intelligence hub for creators and catalog owners — where:
 
@@ -218,7 +218,7 @@ npm install
 npm run dev
 
 
-🤝 **Contributing**
+## 🤝 **Contributing**
 
 This project is currently in solo build mode, but future contributions will follow:
 

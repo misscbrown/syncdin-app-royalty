@@ -8,6 +8,7 @@ import Home from "@/pages/Home";
 import About from "@/pages/About";
 import Dashboard from "@/pages/Dashboard";
 import UploadTracks from "@/pages/UploadTracks"
+import TrackLibrary from "@/pages/TrackLibrary";
 import RoyaltyStatements from "@/pages/RoyaltyStatements";
 import MetadataMatching from "@/pages/MetadataMatching";
 import PlaybackAnalytics from "./pages/PlaybackAnalytics";
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/home" component={Home} />
       <Route path="/about" component={About} />
       <Route path="/upload-tracks" component={UploadTracks} />
+      <Route path="/track-library" component={TrackLibrary} />
       <Route path="/royalty-statements" component={RoyaltyStatements} />
       <Route path="/metadata-matching" component={MetadataMatching} />
       <Route path="/playback-analytics" component={PlaybackAnalytics} />

@@ -1,102 +1,118 @@
-# MyApp - Phase 1 Architecture
+# RoyaltyTrack - Music Royalty Tracking Application
 
 ## Overview
-A full-stack application with React + Vite + TailwindCSS frontend and Node.js + Express backend. This is Phase 1 (architecture setup) - the app loads and navigates between blank screens.
+A full-stack music royalty tracking application with React + Vite + TailwindCSS frontend and Node.js + Express backend. Features a Spotify-style dark theme with purple and blue accent colors, CSV upload/parsing, track library management, and analytics dashboards.
 
 ## Project Structure
 
 ```
-├── frontend/                 # Frontend reference structure
-│   ├── components/          # Reusable React components
-│   │   ├── Navigation.tsx   # Main navigation component
-│   │   └── index.ts         # Component exports
-│   ├── pages/               # Page components
-│   │   ├── Home.tsx         # Home page
-│   │   ├── About.tsx        # About page
-│   │   ├── Dashboard.tsx    # Dashboard page
-│   │   └── index.ts         # Page exports
-│   ├── styles/              # Global styles
-│   │   └── globals.css      # Custom animations and transitions
-│   └── .env.example         # Frontend environment template
-│
-├── backend/                  # Backend reference structure
-│   ├── routes/              # API route definitions
-│   │   ├── index.ts         # Main route registration
-│   │   ├── users.ts         # User-related routes
-│   │   └── items.ts         # Item-related routes
-│   ├── services/            # Business logic layer
-│   │   ├── userService.ts   # User service
-│   │   ├── itemService.ts   # Item service
-│   │   └── index.ts         # Service exports
-│   └── .env.example         # Backend environment template
-│
-├── client/                   # Vite frontend (active)
+├── client/                   # Vite frontend
 │   └── src/
-│       ├── components/      # Active components
-│       ├── pages/           # Active page components
-│       └── App.tsx          # Main app with routing
+│       ├── components/       # Reusable components (AppLayout, UI components)
+│       ├── pages/            # Page components
+│       │   ├── Dashboard.tsx      # Main dashboard
+│       │   ├── UploadTracks.tsx   # CSV file upload
+│       │   ├── TrackLibrary.tsx   # Track listing with stats
+│       │   ├── MetadataMatching.tsx
+│       │   ├── RoyaltyStatements.tsx
+│       │   ├── PlaybackAnalytics.tsx
+│       │   ├── ReportsExports.tsx
+│       │   └── Settings.tsx
+│       ├── lib/              # Utilities (queryClient)
+│       └── styles/           # Theme CSS
 │
-├── server/                   # Express backend (active)
-│   ├── routes.ts            # API routes
-│   └── storage.ts           # Data storage layer
+├── server/                   # Express backend
+│   ├── db.ts                 # Database connection (PostgreSQL via Drizzle)
+│   ├── routes.ts             # API endpoints
+│   └── storage.ts            # Database storage layer
 │
 ├── shared/                   # Shared types and schemas
-│   └── schema.ts            # Data models
+│   └── schema.ts             # Drizzle ORM models
 │
-└── mock_data.json           # Sample mock data structure
+└── attached_assets/          # User-uploaded files
 ```
 
-## Current Routes
+## Database Schema
 
-### Frontend Routes
-- `/` - Home page (blank)
-- `/about` - About page (blank)
-- `/dashboard` - Dashboard page (blank)
-- `*` - 404 Not Found
+### Tables
+- **tracks** - Unique tracks identified by ISRC
+  - id, isrc (unique), title, artist, upc, createdAt
+  
+- **royalty_entries** - Individual CSV line items linked to tracks
+  - id, trackId, uploadedFileId, dateInserted, reportingDate, saleMonth
+  - store, countryOfSale, quantity, earnings, teamPercentage, recoup, extras
+  
+- **uploaded_files** - Metadata about uploaded CSV files
+  - id, filename, originalName, fileType, fileSize, recordCount, status, errorMessage
 
-### Backend API Endpoints (Placeholder)
+## API Endpoints
+
+### File Upload
+- `POST /api/upload` - Upload and parse CSV file (multipart/form-data)
+  - Accepts distributor CSVs, royalty statements, metadata sheets
+  - Auto-maps column names to database fields
+  - Creates/updates tracks and royalty entries
+
+### Data Retrieval
+- `GET /api/files` - List all uploaded files
+- `GET /api/tracks` - Get all tracks with aggregated stats (earnings, streams, platforms, countries)
+- `GET /api/tracks/:id` - Get single track
+- `GET /api/tracks/:id/royalties` - Get royalty entries for a track
+- `GET /api/royalties` - Get all royalty entries
 - `GET /api/health` - Health check
-- `GET /api/users` - List users (Phase 2)
-- `GET /api/items` - List items (Phase 2)
 
-## Development
+## CSV Column Mapping
 
-### Running the Application
-```bash
-npm run dev
-```
+The system supports multiple column name variations:
 
-### Environment Variables
-Copy `.env.example` files in both `frontend/` and `backend/` directories and configure as needed.
+| Expected Field | Supported Variations |
+|---------------|---------------------|
+| isrc | isrc, isrc_code, track_isrc |
+| title | title, track_title, track_name, song_title |
+| artist | artist, artist_name, performer |
+| store | store, dsp, platform, service |
+| earnings | earnings, earnings_(usd), revenue, royalties |
+| quantity | quantity, streams, plays, units |
+| countryOfSale | country_of_sale, country, territory |
+
+## Frontend Routes
+
+- `/` - Dashboard
+- `/upload-tracks` - File Upload page
+- `/track-library` - Track Library with search and sorting
+- `/metadata-matching` - Metadata health and matching operations
+- `/royalty-statements` - Royalties & Earnings analysis
+- `/playback-analytics` - Stream analytics and trends
+- `/reports-exports` - Report generation and MLC comparisons
+- `/settings` - App settings and API connections
 
 ## Tech Stack
 
 ### Frontend
-- React 18
-- Vite
-- TailwindCSS
+- React 18 with TypeScript
+- Vite (build tool)
+- TailwindCSS + shadcn/ui components
 - Wouter (routing)
-- TanStack Query
+- TanStack Query (data fetching)
 
 ### Backend
-- Node.js
-- Express.js
+- Node.js + Express
 - TypeScript
+- Drizzle ORM
+- PostgreSQL (Neon)
+- csv-parse, multer (file handling)
 
-## Phase Status
+## Running the Application
 
-**Phase 1: Architecture Setup** ✅
-- Folder structure created
-- Basic routing configured
-- Blank navigable screens
-- Environment placeholders
-- Mock data structure
+```bash
+npm run dev        # Start dev server
+npm run db:push    # Push schema changes to database
+```
 
-**Phase 2: UI Development** (Next)
-- Build out UI components
-- Implement designs
+## Recent Updates
 
-**Phase 3: Backend Implementation** (Future)
-- Implement API endpoints
-- Database integration
-- Business logic
+- Added PostgreSQL database with Drizzle ORM
+- Implemented CSV upload with automatic column mapping
+- Created Track Library page with search, sorting, and aggregated stats
+- Connected Upload Files page to real API
+- Added real-time file history from database

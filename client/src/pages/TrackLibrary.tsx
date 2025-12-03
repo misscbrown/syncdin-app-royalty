@@ -73,7 +73,7 @@ export default function TrackLibrary() {
   };
 
   const totalEarnings = tracks.reduce((sum, track) => sum + parseFloat(track.totalEarnings || "0"), 0);
-  const totalStreams = tracks.reduce((sum, track) => sum + (track.totalStreams || 0), 0);
+  const totalStreams = tracks.reduce((sum, track) => sum + parseInt(String(track.totalStreams || 0), 10), 0);
   const totalTracks = tracks.length;
   const uniqueArtists = new Set(tracks.map(t => t.artist)).size;
 

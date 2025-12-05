@@ -1,12 +1,13 @@
 import { 
-  users, tracks, royaltyEntries, uploadedFiles,
+  users, tracks, royaltyEntries, uploadedFiles, trackIntegrations,
   type User, type InsertUser,
   type Track, type InsertTrack, type TrackWithStats,
   type RoyaltyEntry, type InsertRoyaltyEntry,
-  type UploadedFile, type InsertUploadedFile
+  type UploadedFile, type InsertUploadedFile,
+  type TrackIntegration, type InsertTrackIntegration
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -35,6 +36,15 @@ export interface IStorage {
   getAllUploadedFiles(): Promise<UploadedFile[]>;
   createUploadedFile(file: InsertUploadedFile): Promise<UploadedFile>;
   updateUploadedFileStatus(id: string, status: string, recordCount?: number, errorMessage?: string): Promise<UploadedFile | undefined>;
+  
+  // Track Integrations
+  getTrackIntegration(trackId: string, provider: string): Promise<TrackIntegration | undefined>;
+  getTrackIntegrationsByTrack(trackId: string): Promise<TrackIntegration[]>;
+  getAllTrackIntegrations(provider?: string): Promise<TrackIntegration[]>;
+  createTrackIntegration(integration: InsertTrackIntegration): Promise<TrackIntegration>;
+  updateTrackIntegration(id: string, updates: Partial<InsertTrackIntegration>): Promise<TrackIntegration | undefined>;
+  deleteTrackIntegration(id: string): Promise<void>;
+  getTracksWithSpotifyStatus(): Promise<Array<Track & { spotifyMatched: boolean; spotifyId?: string; albumArt?: string }>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -163,6 +173,63 @@ export class DatabaseStorage implements IStorage {
       .where(eq(uploadedFiles.id, id))
       .returning();
     return updated || undefined;
+  }
+
+  // Track Integrations
+  async getTrackIntegration(trackId: string, provider: string): Promise<TrackIntegration | undefined> {
+    const [integration] = await db
+      .select()
+      .from(trackIntegrations)
+      .where(and(eq(trackIntegrations.trackId, trackId), eq(trackIntegrations.provider, provider)));
+    return integration || undefined;
+  }
+
+  async getTrackIntegrationsByTrack(trackId: string): Promise<TrackIntegration[]> {
+    return await db.select().from(trackIntegrations).where(eq(trackIntegrations.trackId, trackId));
+  }
+
+  async getAllTrackIntegrations(provider?: string): Promise<TrackIntegration[]> {
+    if (provider) {
+      return await db.select().from(trackIntegrations).where(eq(trackIntegrations.provider, provider));
+    }
+    return await db.select().from(trackIntegrations);
+  }
+
+  async createTrackIntegration(integration: InsertTrackIntegration): Promise<TrackIntegration> {
+    const [result] = await db.insert(trackIntegrations).values(integration).returning();
+    return result;
+  }
+
+  async updateTrackIntegration(id: string, updates: Partial<InsertTrackIntegration>): Promise<TrackIntegration | undefined> {
+    const [updated] = await db
+      .update(trackIntegrations)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(trackIntegrations.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteTrackIntegration(id: string): Promise<void> {
+    await db.delete(trackIntegrations).where(eq(trackIntegrations.id, id));
+  }
+
+  async getTracksWithSpotifyStatus(): Promise<Array<Track & { spotifyMatched: boolean; spotifyId?: string; albumArt?: string }>> {
+    const result = await db.execute(sql`
+      SELECT 
+        t.id,
+        t.isrc,
+        t.title,
+        t.artist,
+        t.upc,
+        t.created_at as "createdAt",
+        CASE WHEN ti.id IS NOT NULL THEN true ELSE false END as "spotifyMatched",
+        ti.provider_id as "spotifyId",
+        ti.album_art as "albumArt"
+      FROM tracks t
+      LEFT JOIN track_integrations ti ON t.id = ti.track_id AND ti.provider = 'spotify'
+      ORDER BY t.created_at DESC
+    `);
+    return result.rows as Array<Track & { spotifyMatched: boolean; spotifyId?: string; albumArt?: string }>;
   }
 }
 

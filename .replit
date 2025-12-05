@@ -19,6 +19,10 @@ localPort = 34071
 externalPort = 3000
 
 [[ports]]
+localPort = 34111
+externalPort = 3003
+
+[[ports]]
 localPort = 36167
 externalPort = 3002
 
@@ -49,3 +53,6 @@ author = "agent"
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
+
+[agent]
+integrations = ["spotify:1.0.0"]

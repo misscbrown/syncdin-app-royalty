@@ -4,7 +4,8 @@ import multer from "multer";
 import { parse } from "csv-parse";
 import { Readable } from "stream";
 import { storage } from "./storage";
-import type { InsertTrack, InsertRoyaltyEntry } from "@shared/schema";
+import type { InsertTrack, InsertRoyaltyEntry, InsertTrackIntegration } from "@shared/schema";
+import { matchTrack, checkSpotifyConnection, type SpotifyTrackMatch } from "./spotify";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -351,6 +352,205 @@ export async function registerRoutes(
     try {
       const entries = await storage.getAllRoyaltyEntries();
       res.json(entries);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // =====================
+  // Spotify Integration Routes
+  // =====================
+
+  // Check Spotify connection status
+  app.get('/api/spotify/status', async (req, res) => {
+    try {
+      const connected = await checkSpotifyConnection();
+      res.json({ connected });
+    } catch (error: any) {
+      res.json({ connected: false, error: error.message });
+    }
+  });
+
+  // Get tracks with Spotify match status
+  app.get('/api/spotify/tracks', async (req, res) => {
+    try {
+      const tracks = await storage.getTracksWithSpotifyStatus();
+      res.json(tracks);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Match a single track with Spotify
+  app.post('/api/spotify/match/:trackId', async (req, res) => {
+    try {
+      const { trackId } = req.params;
+      
+      // Get the track
+      const track = await storage.getTrack(trackId);
+      if (!track) {
+        return res.status(404).json({ error: 'Track not found' });
+      }
+      
+      // Check if already matched
+      const existingMatch = await storage.getTrackIntegration(trackId, 'spotify');
+      if (existingMatch) {
+        return res.json({ 
+          success: true, 
+          alreadyMatched: true,
+          integration: existingMatch 
+        });
+      }
+      
+      // Try to match with Spotify
+      const spotifyMatch = await matchTrack(track.isrc, track.title, track.artist);
+      
+      if (!spotifyMatch) {
+        return res.json({ 
+          success: false, 
+          message: 'No match found on Spotify' 
+        });
+      }
+      
+      // Store the integration
+      const integration: InsertTrackIntegration = {
+        trackId,
+        provider: 'spotify',
+        providerId: spotifyMatch.spotifyId,
+        providerUri: spotifyMatch.spotifyUri,
+        matchedName: spotifyMatch.name,
+        matchedArtists: spotifyMatch.artists,
+        matchedAlbum: spotifyMatch.album,
+        albumArt: spotifyMatch.albumArt,
+        previewUrl: spotifyMatch.previewUrl,
+        matchConfidence: spotifyMatch.isrc === track.isrc ? "100" : "80",
+        matchMethod: spotifyMatch.isrc === track.isrc ? 'isrc' : 'name_artist',
+        popularity: spotifyMatch.popularity,
+        durationMs: spotifyMatch.durationMs,
+        providerIsrc: spotifyMatch.isrc,
+      };
+      
+      const savedIntegration = await storage.createTrackIntegration(integration);
+      
+      res.json({ 
+        success: true, 
+        integration: savedIntegration 
+      });
+    } catch (error: any) {
+      console.error('Spotify match error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Batch match multiple tracks with Spotify
+  app.post('/api/spotify/match-batch', async (req, res) => {
+    try {
+      const { trackIds } = req.body;
+      
+      if (!Array.isArray(trackIds) || trackIds.length === 0) {
+        return res.status(400).json({ error: 'trackIds array is required' });
+      }
+      
+      const results: { 
+        matched: number; 
+        failed: number; 
+        skipped: number;
+        details: Array<{ trackId: string; status: string; spotifyId?: string }> 
+      } = {
+        matched: 0,
+        failed: 0,
+        skipped: 0,
+        details: []
+      };
+      
+      // Process with rate limiting (1 second delay between requests)
+      for (const trackId of trackIds) {
+        try {
+          // Check if already matched
+          const existingMatch = await storage.getTrackIntegration(trackId, 'spotify');
+          if (existingMatch) {
+            results.skipped++;
+            results.details.push({ trackId, status: 'skipped', spotifyId: existingMatch.providerId });
+            continue;
+          }
+          
+          // Get the track
+          const track = await storage.getTrack(trackId);
+          if (!track) {
+            results.failed++;
+            results.details.push({ trackId, status: 'not_found' });
+            continue;
+          }
+          
+          // Try to match
+          const spotifyMatch = await matchTrack(track.isrc, track.title, track.artist);
+          
+          if (!spotifyMatch) {
+            results.failed++;
+            results.details.push({ trackId, status: 'no_match' });
+            continue;
+          }
+          
+          // Store the integration
+          const integration: InsertTrackIntegration = {
+            trackId,
+            provider: 'spotify',
+            providerId: spotifyMatch.spotifyId,
+            providerUri: spotifyMatch.spotifyUri,
+            matchedName: spotifyMatch.name,
+            matchedArtists: spotifyMatch.artists,
+            matchedAlbum: spotifyMatch.album,
+            albumArt: spotifyMatch.albumArt,
+            previewUrl: spotifyMatch.previewUrl,
+            matchConfidence: spotifyMatch.isrc === track.isrc ? "100" : "80",
+            matchMethod: spotifyMatch.isrc === track.isrc ? 'isrc' : 'name_artist',
+            popularity: spotifyMatch.popularity,
+            durationMs: spotifyMatch.durationMs,
+            providerIsrc: spotifyMatch.isrc,
+          };
+          
+          await storage.createTrackIntegration(integration);
+          results.matched++;
+          results.details.push({ trackId, status: 'matched', spotifyId: spotifyMatch.spotifyId });
+          
+          // Rate limiting: wait 200ms between API calls
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+        } catch (err: any) {
+          results.failed++;
+          results.details.push({ trackId, status: 'error' });
+        }
+      }
+      
+      res.json(results);
+    } catch (error: any) {
+      console.error('Batch match error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get Spotify integration for a track
+  app.get('/api/tracks/:id/spotify', async (req, res) => {
+    try {
+      const integration = await storage.getTrackIntegration(req.params.id, 'spotify');
+      if (!integration) {
+        return res.status(404).json({ error: 'No Spotify match found' });
+      }
+      res.json(integration);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Delete a Spotify match (for re-matching)
+  app.delete('/api/tracks/:id/spotify', async (req, res) => {
+    try {
+      const integration = await storage.getTrackIntegration(req.params.id, 'spotify');
+      if (!integration) {
+        return res.status(404).json({ error: 'No Spotify match found' });
+      }
+      await storage.deleteTrackIntegration(integration.id);
+      res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

@@ -121,3 +121,59 @@ export type TrackWithStats = Track & {
   storeCount: number;
   countryCount: number;
 };
+
+// Track Integrations table - stores Spotify and other service matches
+export const trackIntegrations = pgTable("track_integrations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  trackId: varchar("track_id").notNull().references(() => tracks.id),
+  provider: text("provider").notNull(), // 'spotify', 'apple_music', etc.
+  
+  // Provider-specific IDs
+  providerId: text("provider_id").notNull(),
+  providerUri: text("provider_uri"),
+  
+  // Matched metadata from provider
+  matchedName: text("matched_name"),
+  matchedArtists: text("matched_artists").array(),
+  matchedAlbum: text("matched_album"),
+  albumArt: text("album_art"),
+  previewUrl: text("preview_url"),
+  
+  // Match quality
+  matchConfidence: decimal("match_confidence", { precision: 5, scale: 2 }),
+  matchMethod: text("match_method"), // 'isrc', 'name_artist', 'manual'
+  isVerified: text("is_verified").default("false"),
+  
+  // Provider-specific data
+  popularity: integer("popularity"),
+  durationMs: integer("duration_ms"),
+  providerIsrc: text("provider_isrc"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const trackIntegrationsRelations = relations(trackIntegrations, ({ one }) => ({
+  track: one(tracks, {
+    fields: [trackIntegrations.trackId],
+    references: [tracks.id],
+  }),
+}));
+
+export const insertTrackIntegrationSchema = createInsertSchema(trackIntegrations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertTrackIntegration = z.infer<typeof insertTrackIntegrationSchema>;
+export type TrackIntegration = typeof trackIntegrations.$inferSelect;
+
+// Extended track type with integration data
+export type TrackWithIntegrations = Track & {
+  totalEarnings: string;
+  totalStreams: number;
+  storeCount: number;
+  countryCount: number;
+  spotifyMatch?: TrackIntegration | null;
+};

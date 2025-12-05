@@ -1,10 +1,16 @@
 import { SpotifyApi } from "@spotify/web-api-ts-sdk";
 
 let connectionSettings: any;
+let cachedCredentials: { accessToken: string; clientId: string; refreshToken: string; expiresIn: number; expiresAt: number } | null = null;
 
-async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
-    return connectionSettings.settings.access_token;
+async function getAccessToken(): Promise<{ accessToken: string; clientId: string; refreshToken: string; expiresIn: number }> {
+  if (cachedCredentials && cachedCredentials.expiresAt > Date.now()) {
+    return {
+      accessToken: cachedCredentials.accessToken,
+      clientId: cachedCredentials.clientId,
+      refreshToken: cachedCredentials.refreshToken,
+      expiresIn: cachedCredentials.expiresIn,
+    };
   }
   
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
@@ -31,11 +37,20 @@ async function getAccessToken() {
   const refreshToken = connectionSettings?.settings?.oauth?.credentials?.refresh_token;
   const accessToken = connectionSettings?.settings?.access_token || connectionSettings.settings?.oauth?.credentials?.access_token;
   const clientId = connectionSettings?.settings?.oauth?.credentials?.client_id;
-  const expiresIn = connectionSettings.settings?.oauth?.credentials?.expires_in;
+  const expiresIn = connectionSettings.settings?.oauth?.credentials?.expires_in || 3600;
   
   if (!connectionSettings || (!accessToken || !clientId || !refreshToken)) {
     throw new Error('Spotify not connected');
   }
+  
+  cachedCredentials = {
+    accessToken,
+    clientId,
+    refreshToken,
+    expiresIn,
+    expiresAt: Date.now() + (expiresIn * 1000) - 60000,
+  };
+  
   return { accessToken, clientId, refreshToken, expiresIn };
 }
 

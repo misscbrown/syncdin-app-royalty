@@ -51,18 +51,26 @@ export const royaltyEntries = pgTable("royalty_entries", {
   dateInserted: date("date_inserted"),
   reportingDate: date("reporting_date"),
   saleMonth: text("sale_month"),
+  startDate: date("start_date"), // Ditto format
+  endDate: date("end_date"),     // Ditto format
   
   // Source info
   store: text("store").notNull(),
   countryOfSale: text("country_of_sale"),
   songOrAlbum: text("song_or_album"),
+  releaseTitle: text("release_title"), // Album/release title (Ditto)
   
   // Financial data
   quantity: integer("quantity").default(0),
   teamPercentage: decimal("team_percentage", { precision: 5, scale: 2 }),
   songwriterRoyaltiesWithheld: decimal("songwriter_royalties_withheld", { precision: 12, scale: 8 }).default("0"),
   earnings: decimal("earnings", { precision: 12, scale: 8 }).notNull(),
+  netEarnings: decimal("net_earnings", { precision: 12, scale: 8 }), // Ditto: after commission
+  commission: decimal("commission", { precision: 5, scale: 2 }),     // Ditto: commission %
+  splitsPercent: decimal("splits_percent", { precision: 5, scale: 2 }), // Ditto: splits %
+  commissionType: text("commission_type"), // Ditto: type of commission
   recoup: decimal("recoup", { precision: 12, scale: 8 }).default("0"),
+  currency: text("currency").default("USD"), // USD, GBP, etc.
   
   // For any extra columns we might encounter
   extras: jsonb("extras"),

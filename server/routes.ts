@@ -32,17 +32,18 @@ const COLUMN_MAPPINGS: Record<string, string> = {
   'isrc_code': 'isrc',
   'track_isrc': 'isrc',
   
-  // Title variations
+  // Title variations - note: tracktitle is Ditto without space
   'title': 'title',
   'track_title': 'title',
   'track_name': 'title',
   'song_title': 'title',
   'song_name': 'title',
-  'name': 'title',
+  'tracktitle': 'title',
   
   // Artist variations
   'artist': 'artist',
   'artist_name': 'artist',
+  'artistname': 'artist', // Ditto
   'track_artist': 'artist',
   'performer': 'artist',
   
@@ -53,6 +54,8 @@ const COLUMN_MAPPINGS: Record<string, string> = {
   
   // Store/DSP variations
   'store': 'store',
+  'storename': 'store', // Ditto
+  'store_name': 'store',
   'dsp': 'store',
   'platform': 'store',
   'service': 'store',
@@ -65,6 +68,10 @@ const COLUMN_MAPPINGS: Record<string, string> = {
   'reporting date': 'reportingDate',
   'sale_month': 'saleMonth',
   'sale month': 'saleMonth',
+  'startdate': 'startDate', // Ditto
+  'start_date': 'startDate',
+  'enddate': 'endDate', // Ditto
+  'end_date': 'endDate',
   
   // Territory
   'country_of_sale': 'countryOfSale',
@@ -78,6 +85,12 @@ const COLUMN_MAPPINGS: Record<string, string> = {
   'song_or_album': 'songOrAlbum',
   'type': 'songOrAlbum',
   
+  // Release title (album)
+  'releasetitle': 'releaseTitle', // Ditto
+  'release_title': 'releaseTitle',
+  'album': 'releaseTitle',
+  'album_title': 'releaseTitle',
+  
   // Quantity/Streams
   'quantity': 'quantity',
   'streams': 'quantity',
@@ -90,14 +103,34 @@ const COLUMN_MAPPINGS: Record<string, string> = {
   'share': 'teamPercentage',
   'percentage': 'teamPercentage',
   
-  // Earnings
+  // Earnings (gross)
   'earnings_(usd)': 'earnings',
   'earnings (usd)': 'earnings',
+  'earnings_(£)': 'earnings', // Ditto GBP
+  'earnings (£)': 'earnings',
   'earnings': 'earnings',
   'revenue': 'earnings',
   'royalties': 'earnings',
   'amount': 'earnings',
-  'net_amount': 'earnings',
+  
+  // Net earnings (after commission) - Ditto
+  'netearnings_(£)': 'netEarnings',
+  'netearnings (£)': 'netEarnings',
+  'net_earnings': 'netEarnings',
+  'netearnings': 'netEarnings',
+  
+  // Commission - Ditto
+  'commission': 'commission',
+  'commission_%': 'commission',
+  
+  // Splits percent - Ditto
+  'splits_%': 'splitsPercent',
+  'splits %': 'splitsPercent',
+  'splits_percent': 'splitsPercent',
+  
+  // Commission type - Ditto
+  'commissiontype': 'commissionType',
+  'commission_type': 'commissionType',
   
   // Songwriter royalties withheld
   'songwriter_royalties_withheld_(usd)': 'songwriterRoyaltiesWithheld',
@@ -256,6 +289,29 @@ export async function registerRoutes(
             processedTracks.set(isrc, trackId);
           }
           
+          // Skip summary rows (Ditto has summary rows with ISRC but no other data)
+          if (!mappedRecord.store && !mappedRecord.earnings) {
+            continue;
+          }
+          
+          // Detect currency from column headers
+          const hasGbpEarnings = headers.some(h => 
+            h.toLowerCase().includes('(£)') || h.toLowerCase().includes('£')
+          );
+          const currency = hasGbpEarnings ? 'GBP' : 'USD';
+          
+          // Parse commission percentage (remove % sign)
+          let commissionValue = mappedRecord.commission || null;
+          if (commissionValue) {
+            commissionValue = commissionValue.replace('%', '').trim();
+          }
+          
+          // Parse splits percentage (remove % sign)
+          let splitsValue = mappedRecord.splitsPercent || null;
+          if (splitsValue) {
+            splitsValue = splitsValue.replace('%', '').trim();
+          }
+          
           // Create royalty entry
           const entry: InsertRoyaltyEntry = {
             trackId,
@@ -263,14 +319,22 @@ export async function registerRoutes(
             dateInserted: mappedRecord.dateInserted || null,
             reportingDate: mappedRecord.reportingDate || null,
             saleMonth: mappedRecord.saleMonth || null,
+            startDate: mappedRecord.startDate || null,
+            endDate: mappedRecord.endDate || null,
             store: mappedRecord.store || 'Unknown',
             countryOfSale: mappedRecord.countryOfSale || null,
             songOrAlbum: mappedRecord.songOrAlbum || null,
+            releaseTitle: mappedRecord.releaseTitle || null,
             quantity: parseInt(mappedRecord.quantity) || 0,
             teamPercentage: mappedRecord.teamPercentage || null,
             songwriterRoyaltiesWithheld: mappedRecord.songwriterRoyaltiesWithheld || '0',
             earnings: mappedRecord.earnings || '0',
+            netEarnings: mappedRecord.netEarnings || null,
+            commission: commissionValue,
+            splitsPercent: splitsValue,
+            commissionType: mappedRecord.commissionType || null,
             recoup: mappedRecord.recoup || '0',
+            currency,
             extras: Object.keys(extras).length > 0 ? extras : null,
           };
           

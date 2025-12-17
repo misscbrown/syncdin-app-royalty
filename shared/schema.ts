@@ -177,3 +177,116 @@ export type TrackWithIntegrations = Track & {
   countryCount: number;
   spotifyMatch?: TrackIntegration | null;
 };
+
+// ============================================
+// PRS Performance Royalty Statement Tables
+// ============================================
+
+// PRS Statements - uploaded statement files
+export const prsStatements = pgTable("prs_statements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  filename: text("filename").notNull(),
+  originalName: text("original_name").notNull(),
+  statementPeriod: text("statement_period"), // e.g., "2024 Q3"
+  statementDate: date("statement_date"),
+  totalRoyalties: decimal("total_royalties", { precision: 12, scale: 2 }).default("0"),
+  currency: text("currency").default("GBP"),
+  workCount: integer("work_count").default(0),
+  status: text("status").notNull().default("processing"),
+  errorMessage: text("error_message"),
+  uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+});
+
+export const prsStatementsRelations = relations(prsStatements, ({ many }) => ({
+  performanceRoyalties: many(performanceRoyalties),
+}));
+
+export const insertPrsStatementSchema = createInsertSchema(prsStatements).omit({
+  id: true,
+  uploadedAt: true,
+});
+
+export type InsertPrsStatement = z.infer<typeof insertPrsStatementSchema>;
+export type PrsStatement = typeof prsStatements.$inferSelect;
+
+// Works - unique musical works (by PRS work number)
+export const works = pgTable("works", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workNo: text("work_no").notNull().unique(), // PRS Work Number
+  title: text("title").notNull(),
+  ip1: text("ip1"), // Interested Party 1 (writer/composer)
+  ip2: text("ip2"), // Interested Party 2
+  ip3: text("ip3"), // Interested Party 3
+  ip4: text("ip4"), // Interested Party 4
+  yourSharePercent: decimal("your_share_percent", { precision: 5, scale: 2 }),
+  trackId: varchar("track_id").references(() => tracks.id), // Optional link to track by ISRC
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const worksRelations = relations(works, ({ one, many }) => ({
+  track: one(tracks, {
+    fields: [works.trackId],
+    references: [tracks.id],
+  }),
+  performanceRoyalties: many(performanceRoyalties),
+}));
+
+export const insertWorkSchema = createInsertSchema(works).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertWork = z.infer<typeof insertWorkSchema>;
+export type Work = typeof works.$inferSelect;
+
+// Performance Royalties - individual performance entries per work
+export const performanceRoyalties = pgTable("performance_royalties", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workId: varchar("work_id").notNull().references(() => works.id),
+  prsStatementId: varchar("prs_statement_id").notNull().references(() => prsStatements.id),
+  
+  // Usage info
+  usageTerritory: text("usage_territory"), // e.g., "TV - UK"
+  broadcastRegion: text("broadcast_region"), // e.g., "ITV Network"
+  period: text("period"), // e.g., "2024-01 to 2024-03"
+  
+  // Duration in seconds (from hh:mm:ss)
+  durationSeconds: integer("duration_seconds"),
+  
+  // Production info
+  production: text("production"), // e.g., show name
+  
+  // Performance data
+  performances: integer("performances").default(0),
+  royaltyAmount: decimal("royalty_amount", { precision: 12, scale: 2 }).notNull(),
+  currency: text("currency").default("GBP"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const performanceRoyaltiesRelations = relations(performanceRoyalties, ({ one }) => ({
+  work: one(works, {
+    fields: [performanceRoyalties.workId],
+    references: [works.id],
+  }),
+  prsStatement: one(prsStatements, {
+    fields: [performanceRoyalties.prsStatementId],
+    references: [prsStatements.id],
+  }),
+}));
+
+export const insertPerformanceRoyaltySchema = createInsertSchema(performanceRoyalties).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPerformanceRoyalty = z.infer<typeof insertPerformanceRoyaltySchema>;
+export type PerformanceRoyalty = typeof performanceRoyalties.$inferSelect;
+
+// Aggregated work stats type (for Work listing views)
+export type WorkWithStats = Work & {
+  totalRoyalties: string;
+  totalPerformances: number;
+  territoriesCount: number;
+  productionsCount: number;
+};

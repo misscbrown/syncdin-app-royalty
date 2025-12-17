@@ -4,7 +4,10 @@ import multer from "multer";
 import { parse } from "csv-parse";
 import { Readable } from "stream";
 import { storage } from "./storage";
-import type { InsertTrack, InsertRoyaltyEntry, InsertTrackIntegration } from "@shared/schema";
+import type { 
+  InsertTrack, InsertRoyaltyEntry, InsertTrackIntegration,
+  InsertPrsStatement, InsertWork, InsertPerformanceRoyalty
+} from "@shared/schema";
 import { matchTrack, checkSpotifyConnection, type SpotifyTrackMatch } from "./spotify";
 
 // Configure multer for file uploads
@@ -551,6 +554,276 @@ export async function registerRoutes(
       }
       await storage.deleteTrackIntegration(integration.id);
       res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================
+  // PRS Performance Royalty Statement Endpoints
+  // ============================================
+
+  // Get all PRS statements
+  app.get('/api/prs-statements', async (req, res) => {
+    try {
+      const statements = await storage.getAllPrsStatements();
+      res.json(statements);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get single PRS statement with summary
+  app.get('/api/prs-statements/:id', async (req, res) => {
+    try {
+      const statement = await storage.getPrsStatement(req.params.id);
+      if (!statement) {
+        return res.status(404).json({ error: 'Statement not found' });
+      }
+      const entries = await storage.getPerformanceRoyaltiesByStatement(req.params.id);
+      res.json({ ...statement, entries });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Upload PRS statement CSV
+  app.post('/api/prs-statements/upload', upload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      const { statementPeriod } = req.body;
+
+      // Create statement record
+      const statement = await storage.createPrsStatement({
+        filename: req.file.originalname,
+        originalName: req.file.originalname,
+        statementPeriod: statementPeriod || null,
+        status: 'processing',
+      });
+
+      // Parse CSV
+      const csvContent = req.file.buffer.toString('utf-8');
+      const records: any[] = [];
+
+      await new Promise<void>((resolve, reject) => {
+        const parser = parse({
+          columns: true,
+          skip_empty_lines: true,
+          trim: true,
+          relax_column_count: true,
+        });
+
+        parser.on('readable', () => {
+          let record;
+          while ((record = parser.read()) !== null) {
+            records.push(record);
+          }
+        });
+
+        parser.on('error', reject);
+        parser.on('end', resolve);
+
+        const stream = Readable.from(csvContent);
+        stream.pipe(parser);
+      });
+
+      // PRS column mappings
+      const PRS_COLUMN_MAPPINGS: Record<string, string> = {
+        'work_title': 'workTitle',
+        'work title': 'workTitle',
+        'title': 'workTitle',
+        'work_no': 'workNo',
+        'work no': 'workNo',
+        'work number': 'workNo',
+        'ip1': 'ip1',
+        'ip2': 'ip2',
+        'ip3': 'ip3',
+        'ip4': 'ip4',
+        'your_share_%': 'yourSharePercent',
+        'your share %': 'yourSharePercent',
+        'your_share_percent': 'yourSharePercent',
+        'share': 'yourSharePercent',
+        'usage_&_territory': 'usageTerritory',
+        'usage & territory': 'usageTerritory',
+        'usage_territory': 'usageTerritory',
+        'usage territory': 'usageTerritory',
+        'broadcast_region': 'broadcastRegion',
+        'broadcast region': 'broadcastRegion',
+        'region': 'broadcastRegion',
+        'period': 'period',
+        'hhhh:mm:ss': 'duration',
+        'duration': 'duration',
+        'time': 'duration',
+        'production': 'production',
+        'performances': 'performances',
+        'royalty_£': 'royaltyAmount',
+        'royalty £': 'royaltyAmount',
+        'royalty': 'royaltyAmount',
+        'amount': 'royaltyAmount',
+      };
+
+      // Process records
+      let totalRoyalties = 0;
+      const workMap = new Map<string, string>(); // workNo -> workId
+      const performanceEntries: InsertPerformanceRoyalty[] = [];
+
+      for (const record of records) {
+        // Normalize column names
+        const normalizedRecord: Record<string, any> = {};
+        for (const [key, value] of Object.entries(record)) {
+          const normalizedKey = key.toLowerCase().trim().replace(/\s+/g, '_');
+          const mappedKey = PRS_COLUMN_MAPPINGS[normalizedKey] || PRS_COLUMN_MAPPINGS[key.toLowerCase().trim()];
+          if (mappedKey) {
+            normalizedRecord[mappedKey] = value;
+          } else {
+            normalizedRecord[normalizedKey] = value;
+          }
+        }
+
+        // Skip if no work number
+        if (!normalizedRecord.workNo) continue;
+
+        // Get or create work
+        let workId = workMap.get(normalizedRecord.workNo);
+        if (!workId) {
+          const work = await storage.upsertWork({
+            workNo: normalizedRecord.workNo,
+            title: normalizedRecord.workTitle || 'Unknown',
+            ip1: normalizedRecord.ip1 || null,
+            ip2: normalizedRecord.ip2 || null,
+            ip3: normalizedRecord.ip3 || null,
+            ip4: normalizedRecord.ip4 || null,
+            yourSharePercent: normalizedRecord.yourSharePercent ? 
+              String(parseFloat(normalizedRecord.yourSharePercent.replace('%', ''))) : null,
+          });
+          workId = work.id;
+          workMap.set(normalizedRecord.workNo, workId);
+        }
+
+        // Parse duration (hh:mm:ss or hhhh:mm:ss to seconds)
+        let durationSeconds: number | null = null;
+        if (normalizedRecord.duration) {
+          const parts = normalizedRecord.duration.split(':').map(Number);
+          if (parts.length === 3) {
+            durationSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+          }
+        }
+
+        // Parse royalty amount
+        const royaltyAmount = parseFloat(
+          String(normalizedRecord.royaltyAmount || '0')
+            .replace('£', '')
+            .replace(',', '')
+            .trim()
+        ) || 0;
+        totalRoyalties += royaltyAmount;
+
+        performanceEntries.push({
+          workId,
+          prsStatementId: statement.id,
+          usageTerritory: normalizedRecord.usageTerritory || null,
+          broadcastRegion: normalizedRecord.broadcastRegion || null,
+          period: normalizedRecord.period || null,
+          durationSeconds,
+          production: normalizedRecord.production || null,
+          performances: parseInt(normalizedRecord.performances) || 0,
+          royaltyAmount: royaltyAmount.toFixed(2),
+          currency: 'GBP',
+        });
+      }
+
+      // Bulk insert performance royalties
+      if (performanceEntries.length > 0) {
+        await storage.createPerformanceRoyalties(performanceEntries);
+      }
+
+      // Update statement status
+      await storage.updatePrsStatementStatus(
+        statement.id,
+        'completed',
+        workMap.size,
+        totalRoyalties.toFixed(2)
+      );
+
+      res.json({
+        success: true,
+        statementId: statement.id,
+        worksProcessed: workMap.size,
+        entriesProcessed: performanceEntries.length,
+        totalRoyalties: totalRoyalties.toFixed(2),
+      });
+    } catch (error: any) {
+      console.error('PRS upload error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get all works with stats
+  app.get('/api/works', async (req, res) => {
+    try {
+      const works = await storage.getWorksWithStats();
+      res.json(works);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get single work with performance royalties
+  app.get('/api/works/:id', async (req, res) => {
+    try {
+      const work = await storage.getWork(req.params.id);
+      if (!work) {
+        return res.status(404).json({ error: 'Work not found' });
+      }
+      const royalties = await storage.getPerformanceRoyaltiesByWork(req.params.id);
+      res.json({ ...work, royalties });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get all performance royalties
+  app.get('/api/performance-royalties', async (req, res) => {
+    try {
+      const royalties = await storage.getAllPerformanceRoyalties();
+      res.json(royalties);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get performance royalties summary (for dashboard)
+  app.get('/api/performance-royalties/summary', async (req, res) => {
+    try {
+      const statements = await storage.getAllPrsStatements();
+      const works = await storage.getWorksWithStats();
+      const allRoyalties = await storage.getAllPerformanceRoyalties();
+
+      const totalRoyalties = works.reduce((sum, w) => sum + parseFloat(w.totalRoyalties || '0'), 0);
+      const totalPerformances = works.reduce((sum, w) => sum + (w.totalPerformances || 0), 0);
+
+      // Group by territory
+      const territoryBreakdown: Record<string, { count: number; royalties: number }> = {};
+      for (const r of allRoyalties) {
+        const territory = r.usageTerritory || 'Unknown';
+        if (!territoryBreakdown[territory]) {
+          territoryBreakdown[territory] = { count: 0, royalties: 0 };
+        }
+        territoryBreakdown[territory].count += r.performances || 0;
+        territoryBreakdown[territory].royalties += parseFloat(r.royaltyAmount || '0');
+      }
+
+      res.json({
+        totalStatements: statements.length,
+        totalWorks: works.length,
+        totalRoyalties: totalRoyalties.toFixed(2),
+        totalPerformances,
+        territoryBreakdown,
+        latestStatement: statements[0] || null,
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

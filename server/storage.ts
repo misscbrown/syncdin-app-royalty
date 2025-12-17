@@ -1,10 +1,14 @@
 import { 
   users, tracks, royaltyEntries, uploadedFiles, trackIntegrations,
+  prsStatements, works, performanceRoyalties,
   type User, type InsertUser,
   type Track, type InsertTrack, type TrackWithStats,
   type RoyaltyEntry, type InsertRoyaltyEntry,
   type UploadedFile, type InsertUploadedFile,
-  type TrackIntegration, type InsertTrackIntegration
+  type TrackIntegration, type InsertTrackIntegration,
+  type PrsStatement, type InsertPrsStatement,
+  type Work, type InsertWork, type WorkWithStats,
+  type PerformanceRoyalty, type InsertPerformanceRoyalty
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, desc, and } from "drizzle-orm";
@@ -45,6 +49,28 @@ export interface IStorage {
   updateTrackIntegration(id: string, updates: Partial<InsertTrackIntegration>): Promise<TrackIntegration | undefined>;
   deleteTrackIntegration(id: string): Promise<void>;
   getTracksWithSpotifyStatus(): Promise<Array<Track & { spotifyMatched: boolean; spotifyId?: string; albumArt?: string }>>;
+  
+  // PRS Statements
+  getPrsStatement(id: string): Promise<PrsStatement | undefined>;
+  getAllPrsStatements(): Promise<PrsStatement[]>;
+  createPrsStatement(statement: InsertPrsStatement): Promise<PrsStatement>;
+  updatePrsStatementStatus(id: string, status: string, workCount?: number, totalRoyalties?: string, errorMessage?: string): Promise<PrsStatement | undefined>;
+  
+  // Works
+  getWork(id: string): Promise<Work | undefined>;
+  getWorkByWorkNo(workNo: string): Promise<Work | undefined>;
+  getAllWorks(): Promise<Work[]>;
+  getWorksWithStats(): Promise<WorkWithStats[]>;
+  createWork(work: InsertWork): Promise<Work>;
+  upsertWork(work: InsertWork): Promise<Work>;
+  
+  // Performance Royalties
+  getPerformanceRoyalty(id: string): Promise<PerformanceRoyalty | undefined>;
+  getPerformanceRoyaltiesByWork(workId: string): Promise<PerformanceRoyalty[]>;
+  getPerformanceRoyaltiesByStatement(statementId: string): Promise<PerformanceRoyalty[]>;
+  getAllPerformanceRoyalties(): Promise<PerformanceRoyalty[]>;
+  createPerformanceRoyalty(entry: InsertPerformanceRoyalty): Promise<PerformanceRoyalty>;
+  createPerformanceRoyalties(entries: InsertPerformanceRoyalty[]): Promise<PerformanceRoyalty[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -230,6 +256,123 @@ export class DatabaseStorage implements IStorage {
       ORDER BY t.created_at DESC
     `);
     return result.rows as Array<Track & { spotifyMatched: boolean; spotifyId?: string; albumArt?: string }>;
+  }
+
+  // PRS Statements
+  async getPrsStatement(id: string): Promise<PrsStatement | undefined> {
+    const [statement] = await db.select().from(prsStatements).where(eq(prsStatements.id, id));
+    return statement || undefined;
+  }
+
+  async getAllPrsStatements(): Promise<PrsStatement[]> {
+    return await db.select().from(prsStatements).orderBy(desc(prsStatements.uploadedAt));
+  }
+
+  async createPrsStatement(statement: InsertPrsStatement): Promise<PrsStatement> {
+    const [result] = await db.insert(prsStatements).values(statement).returning();
+    return result;
+  }
+
+  async updatePrsStatementStatus(
+    id: string,
+    status: string,
+    workCount?: number,
+    totalRoyalties?: string,
+    errorMessage?: string
+  ): Promise<PrsStatement | undefined> {
+    const updateData: Partial<PrsStatement> = { status };
+    if (workCount !== undefined) updateData.workCount = workCount;
+    if (totalRoyalties !== undefined) updateData.totalRoyalties = totalRoyalties;
+    if (errorMessage !== undefined) updateData.errorMessage = errorMessage;
+
+    const [updated] = await db
+      .update(prsStatements)
+      .set(updateData)
+      .where(eq(prsStatements.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Works
+  async getWork(id: string): Promise<Work | undefined> {
+    const [work] = await db.select().from(works).where(eq(works.id, id));
+    return work || undefined;
+  }
+
+  async getWorkByWorkNo(workNo: string): Promise<Work | undefined> {
+    const [work] = await db.select().from(works).where(eq(works.workNo, workNo));
+    return work || undefined;
+  }
+
+  async getAllWorks(): Promise<Work[]> {
+    return await db.select().from(works).orderBy(desc(works.createdAt));
+  }
+
+  async getWorksWithStats(): Promise<WorkWithStats[]> {
+    const result = await db.execute(sql`
+      SELECT 
+        w.id,
+        w.work_no as "workNo",
+        w.title,
+        w.ip1,
+        w.ip2,
+        w.ip3,
+        w.ip4,
+        w.your_share_percent as "yourSharePercent",
+        w.track_id as "trackId",
+        w.created_at as "createdAt",
+        COALESCE(SUM(CAST(pr.royalty_amount AS DECIMAL)), 0) as "totalRoyalties",
+        COALESCE(SUM(pr.performances), 0) as "totalPerformances",
+        COUNT(DISTINCT pr.usage_territory) as "territoriesCount",
+        COUNT(DISTINCT pr.production) as "productionsCount"
+      FROM works w
+      LEFT JOIN performance_royalties pr ON w.id = pr.work_id
+      GROUP BY w.id, w.work_no, w.title, w.ip1, w.ip2, w.ip3, w.ip4, w.your_share_percent, w.track_id, w.created_at
+      ORDER BY "totalRoyalties" DESC
+    `);
+    return result.rows as WorkWithStats[];
+  }
+
+  async createWork(work: InsertWork): Promise<Work> {
+    const [result] = await db.insert(works).values(work).returning();
+    return result;
+  }
+
+  async upsertWork(work: InsertWork): Promise<Work> {
+    const existing = await this.getWorkByWorkNo(work.workNo);
+    if (existing) {
+      return existing;
+    }
+    return await this.createWork(work);
+  }
+
+  // Performance Royalties
+  async getPerformanceRoyalty(id: string): Promise<PerformanceRoyalty | undefined> {
+    const [entry] = await db.select().from(performanceRoyalties).where(eq(performanceRoyalties.id, id));
+    return entry || undefined;
+  }
+
+  async getPerformanceRoyaltiesByWork(workId: string): Promise<PerformanceRoyalty[]> {
+    return await db.select().from(performanceRoyalties).where(eq(performanceRoyalties.workId, workId));
+  }
+
+  async getPerformanceRoyaltiesByStatement(statementId: string): Promise<PerformanceRoyalty[]> {
+    return await db.select().from(performanceRoyalties).where(eq(performanceRoyalties.prsStatementId, statementId));
+  }
+
+  async getAllPerformanceRoyalties(): Promise<PerformanceRoyalty[]> {
+    return await db.select().from(performanceRoyalties).orderBy(desc(performanceRoyalties.createdAt));
+  }
+
+  async createPerformanceRoyalty(entry: InsertPerformanceRoyalty): Promise<PerformanceRoyalty> {
+    const [result] = await db.insert(performanceRoyalties).values(entry).returning();
+    return result;
+  }
+
+  async createPerformanceRoyalties(entries: InsertPerformanceRoyalty[]): Promise<PerformanceRoyalty[]> {
+    if (entries.length === 0) return [];
+    const result = await db.insert(performanceRoyalties).values(entries).returning();
+    return result;
   }
 }
 

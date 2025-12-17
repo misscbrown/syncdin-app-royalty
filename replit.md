@@ -1,7 +1,7 @@
 # RoyaltyTrack - Music Royalty Tracking Application
 
 ## Overview
-A full-stack music royalty tracking application with React + Vite + TailwindCSS frontend and Node.js + Express backend. Features a Spotify-style dark theme with purple and blue accent colors, CSV upload/parsing, track library management, Spotify metadata matching, and analytics dashboards.
+A full-stack music royalty tracking application with React + Vite + TailwindCSS frontend and Node.js + Express backend. Features a Spotify-style dark theme with purple and blue accent colors, CSV upload/parsing, track library management, multi-source metadata matching (Spotify + YouTube), and analytics dashboards.
 
 ## Project Structure
 
@@ -25,7 +25,8 @@ A full-stack music royalty tracking application with React + Vite + TailwindCSS 
 │   ├── db.ts                 # Database connection (PostgreSQL via Drizzle)
 │   ├── routes.ts             # API endpoints
 │   ├── storage.ts            # Database storage layer
-│   └── spotify.ts            # Spotify API client
+│   ├── spotify.ts            # Spotify API client
+│   └── youtube.ts            # YouTube Data API v3 client
 │
 ├── shared/                   # Shared types and schemas
 │   └── schema.ts             # Drizzle ORM models
@@ -46,11 +47,12 @@ A full-stack music royalty tracking application with React + Vite + TailwindCSS 
 - **uploaded_files** - Metadata about uploaded CSV files
   - id, filename, originalName, fileType, fileSize, recordCount, status, errorMessage
 
-- **track_integrations** - Spotify and other service matches
-  - id, trackId, provider, providerId, providerUri
+- **track_integrations** - Spotify and YouTube service matches
+  - id, trackId, provider (spotify/youtube), providerId, providerUri
   - matchedName, matchedArtists, matchedAlbum, albumArt, previewUrl
-  - matchConfidence, matchMethod, isVerified
-  - popularity, durationMs, providerIsrc
+  - matchConfidence, matchMethod (isrc/title_artist_duration/title_artist_channel/fuzzy), matchSource
+  - isVerified, popularity, durationMs, providerIsrc
+  - viewCount, channelName, channelId (YouTube-specific)
 
 - **prs_statements** - Uploaded PRS performance royalty statement files
   - id, filename, originalName, statementPeriod, statementDate
@@ -87,6 +89,22 @@ A full-stack music royalty tracking application with React + Vite + TailwindCSS 
 - `POST /api/spotify/match-batch` - Match multiple tracks (rate-limited)
 - `GET /api/tracks/:id/spotify` - Get Spotify integration for a track
 - `DELETE /api/tracks/:id/spotify` - Remove Spotify match for re-matching
+
+### YouTube Data API v3 Integration
+- `GET /api/youtube/status` - Check YouTube API connection status
+- `POST /api/youtube/match/:trackId` - Match single track with YouTube
+- `POST /api/youtube/match-batch` - Match multiple tracks (rate-limited, 500ms delay)
+- `GET /api/tracks/:id/youtube` - Get YouTube integration for a track
+- `DELETE /api/tracks/:id/youtube` - Remove YouTube match for re-matching
+- `GET /api/integrations/tracks` - Get tracks with both Spotify and YouTube status
+- `GET /api/tracks/:id/integrations` - Get all integrations for a track
+
+### YouTube Matching Priority
+1. **ISRC match (100%)** - Searches YouTube for ISRC in video descriptions
+2. **Title + Duration (90%)** - Cross-references with Spotify duration (±5 seconds)
+3. **Title + Channel verification (85%)** - Official/VEVO channels
+4. **Title + Artist in title (75%)** - Artist name appears in video title
+5. **Fuzzy match (<60%)** - Flagged for manual review
 
 ### PRS Performance Royalty Statements
 - `GET /api/prs-statements` - List all PRS statements
@@ -130,7 +148,7 @@ A full-stack music royalty tracking application with React + Vite + TailwindCSS 
 - `/` - Dashboard
 - `/upload-tracks` - File Upload page
 - `/track-library` - Track Library with search and sorting
-- `/metadata-matching` - Spotify matching & metadata health
+- `/metadata-matching` - Spotify + YouTube matching & metadata health
 - `/royalty-statements` - PRS statements, works library, analytics
 - `/playback-analytics` - Stream analytics and trends
 - `/reports-exports` - Report generation and MLC comparisons
@@ -153,6 +171,7 @@ A full-stack music royalty tracking application with React + Vite + TailwindCSS 
 - PostgreSQL (Neon)
 - csv-parse, multer (file handling)
 - @spotify/web-api-ts-sdk (Spotify integration)
+- googleapis (YouTube Data API v3)
 
 ## Running the Application
 
@@ -173,3 +192,9 @@ npm run db:push    # Push schema changes to database
 - Built Metadata Matching page with batch and single track matching
 - Added PRS performance royalty statement support (prs_statements, works, performance_royalties tables)
 - Built Royalty Statements page with upload, works library, and territory analytics
+- **Integrated YouTube Data API v3** for secondary metadata matching:
+  - Multi-priority matching: ISRC (100%) → Duration (90%) → Channel (85%) → Fuzzy (<60%)
+  - Cross-platform validation using Spotify duration data
+  - YouTube view count tracking as exposure signal
+  - Unified Metadata Matching UI showing both Spotify and YouTube matches
+  - Rate-limited batch matching to respect API quotas

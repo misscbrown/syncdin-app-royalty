@@ -9,7 +9,7 @@ import type {
   InsertPrsStatement, InsertWork, InsertPerformanceRoyalty
 } from "@shared/schema";
 import { matchTrack, checkSpotifyConnection, type SpotifyTrackMatch } from "./spotify";
-import { matchTrackOnYouTube, checkYouTubeConnection, type YouTubeTrackMatch, type YouTubeMatchResult } from "./youtube";
+import { matchTrackOnYouTube, checkYouTubeConnection } from "./youtube";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -673,8 +673,8 @@ export async function registerRoutes(
       const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify');
       const spotifyDurationMs = spotifyMatch?.durationMs || null;
       
-      // Try to match with YouTube
-      const youtubeResult = await matchTrackOnYouTube(track.title, track.artist, spotifyDurationMs);
+      // Try to match with YouTube (ISRC → duration → channel → fuzzy)
+      const youtubeResult = await matchTrackOnYouTube(track.title, track.artist, track.isrc, spotifyDurationMs);
       
       if (!youtubeResult.match) {
         return res.json({ 
@@ -759,8 +759,8 @@ export async function registerRoutes(
           const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify');
           const spotifyDurationMs = spotifyMatch?.durationMs || null;
           
-          // Try to match with YouTube
-          const youtubeResult = await matchTrackOnYouTube(track.title, track.artist, spotifyDurationMs);
+          // Try to match with YouTube (ISRC → duration → channel → fuzzy)
+          const youtubeResult = await matchTrackOnYouTube(track.title, track.artist, track.isrc, spotifyDurationMs);
           
           if (!youtubeResult.match) {
             results.failed++;

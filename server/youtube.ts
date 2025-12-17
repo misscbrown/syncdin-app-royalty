@@ -71,6 +71,66 @@ function isOfficialChannel(channelTitle: string, artistName: string): boolean {
   return false;
 }
 
+export async function searchYouTubeByISRC(isrc: string): Promise<YouTubeTrackMatch | null> {
+  try {
+    const searchResponse = await youtube.search.list({
+      part: ["snippet"],
+      q: isrc,
+      type: ["video"],
+      maxResults: 3,
+      order: "relevance",
+    });
+
+    if (!searchResponse.data.items || searchResponse.data.items.length === 0) {
+      return null;
+    }
+
+    const videoIds = searchResponse.data.items
+      .map((item) => item.id?.videoId)
+      .filter((id): id is string => !!id);
+
+    if (videoIds.length === 0) return null;
+
+    const videoResponse = await youtube.videos.list({
+      part: ["snippet", "contentDetails", "statistics"],
+      id: videoIds,
+    });
+
+    if (!videoResponse.data.items) return null;
+
+    for (const video of videoResponse.data.items) {
+      const description = (video.snippet?.description || "").toUpperCase();
+      if (description.includes(isrc.toUpperCase())) {
+        const durationMs = video.contentDetails?.duration
+          ? parseDuration(video.contentDetails.duration)
+          : null;
+
+        return {
+          videoId: video.id!,
+          videoUrl: `https://www.youtube.com/watch?v=${video.id}`,
+          title: video.snippet?.title || "",
+          channelTitle: video.snippet?.channelTitle || "",
+          channelId: video.snippet?.channelId || "",
+          description: video.snippet?.description || "",
+          publishedAt: video.snippet?.publishedAt || "",
+          thumbnail: video.snippet?.thumbnails?.high?.url || 
+                     video.snippet?.thumbnails?.default?.url || null,
+          viewCount: video.statistics?.viewCount 
+            ? parseInt(video.statistics.viewCount, 10) 
+            : null,
+          duration: video.contentDetails?.duration || null,
+          durationMs,
+        };
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error(`YouTube ISRC search error for "${isrc}":`, error);
+    return null;
+  }
+}
+
 export async function searchYouTubeByQuery(
   title: string,
   artist: string,
@@ -136,8 +196,23 @@ export async function searchYouTubeByQuery(
 export async function matchTrackOnYouTube(
   title: string,
   artist: string,
+  isrc?: string | null,
   spotifyDurationMs?: number | null
 ): Promise<YouTubeMatchResult> {
+  // Priority 1: ISRC match (100% confidence)
+  if (isrc) {
+    const isrcMatch = await searchYouTubeByISRC(isrc);
+    if (isrcMatch) {
+      return {
+        match: isrcMatch,
+        confidence: 100,
+        matchMethod: "isrc",
+        matchSource: "youtube",
+      };
+    }
+  }
+
+  // Priority 2-4: Title/artist search with confidence ladder
   const results = await searchYouTubeByQuery(title, artist, 5);
 
   if (results.length === 0) {
@@ -149,9 +224,10 @@ export async function matchTrackOnYouTube(
     const hasArtistInChannel = isOfficialChannel(video.channelTitle, artist);
     const hasArtistInTitle = normalizeString(video.title).includes(normalizeString(artist));
 
+    // Priority 2: Duration match with Spotify cross-reference (90%)
     if (spotifyDurationMs && video.durationMs) {
       const durationDiff = Math.abs(spotifyDurationMs - video.durationMs);
-      const durationTolerance = 3000; // 3 seconds tolerance
+      const durationTolerance = 5000; // 5 seconds tolerance
       
       if (durationDiff <= durationTolerance && titleSimilarity > 0.7) {
         return {
@@ -163,6 +239,7 @@ export async function matchTrackOnYouTube(
       }
     }
 
+    // Priority 3: Official channel verification (85%) or artist in title (75%)
     if (titleSimilarity > 0.8 && (hasArtistInChannel || hasArtistInTitle)) {
       const confidence = hasArtistInChannel ? 85 : 75;
       return {
@@ -174,6 +251,7 @@ export async function matchTrackOnYouTube(
     }
   }
 
+  // Priority 4: Fuzzy match (flagged for review, <60%)
   const bestMatch = results[0];
   const titleSimilarity = calculateTitleSimilarity(bestMatch.title, title);
   

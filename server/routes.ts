@@ -1118,5 +1118,120 @@ export async function registerRoutes(
     }
   });
 
+  // Dashboard API - aggregates all metrics from real data
+  app.get('/api/dashboard', async (req, res) => {
+    try {
+      // Get all data sources
+      const tracks = await storage.getTracksWithStats();
+      const allIntegrations = await storage.getAllTrackIntegrations();
+      const royaltyEntries = await storage.getAllRoyaltyEntries();
+      const prsStatements = await storage.getAllPrsStatements();
+      const works = await storage.getWorksWithStats();
+
+      // Helper for safe number parsing
+      const safeNumber = (val: any): number => {
+        const num = Number(val);
+        return isFinite(num) ? num : 0;
+      };
+
+      // Calculate totals (parse as numbers since SQL returns strings for aggregates)
+      const totalTracks = tracks.length;
+      const totalEarnings = tracks.reduce((sum, t) => sum + safeNumber(t.totalEarnings), 0);
+      const totalStreams = tracks.reduce((sum, t) => sum + Math.floor(safeNumber(t.totalStreams)), 0);
+
+      // Metadata matching stats - deduplicate by track ID
+      const spotifyTrackIds = new Set(allIntegrations.filter(i => i.provider === 'spotify').map(i => i.trackId));
+      const youtubeTrackIds = new Set(allIntegrations.filter(i => i.provider === 'youtube').map(i => i.trackId));
+      const spotifyMatched = spotifyTrackIds.size;
+      const youtubeMatched = youtubeTrackIds.size;
+      
+      // Calculate proper metadata status per track
+      const matchedByAny = new Set(Array.from(spotifyTrackIds).concat(Array.from(youtubeTrackIds)));
+      const unmatchedTracks = Math.max(0, totalTracks - matchedByAny.size);
+
+      // YouTube total views (deduplicated by track, take max view count per track)
+      const youtubeViewsByTrack: Record<string, number> = {};
+      for (const i of allIntegrations.filter(i => i.provider === 'youtube')) {
+        const views = safeNumber(i.viewCount);
+        youtubeViewsByTrack[i.trackId] = Math.max(youtubeViewsByTrack[i.trackId] || 0, views);
+      }
+      const totalYouTubeViews = Object.values(youtubeViewsByTrack).reduce((sum, v) => sum + v, 0);
+
+      // PRS performance royalties total
+      const totalPerformanceRoyalties = works.reduce((sum, w) => sum + parseFloat(w.totalRoyalties || '0'), 0);
+
+      // Monthly playback data (group royalty entries by month)
+      const monthlyData: Record<string, { streams: number; earnings: number }> = {};
+      for (const entry of royaltyEntries) {
+        const month = entry.saleMonth || entry.reportingDate || 'Unknown';
+        const monthKey = month.substring(0, 7); // YYYY-MM format
+        if (!monthlyData[monthKey]) {
+          monthlyData[monthKey] = { streams: 0, earnings: 0 };
+        }
+        monthlyData[monthKey].streams += Math.floor(safeNumber(entry.quantity));
+        monthlyData[monthKey].earnings += safeNumber(entry.earnings);
+      }
+
+      // Sort months and take last 6
+      const sortedMonths = Object.keys(monthlyData).sort().slice(-6);
+      const playbackFrequency = sortedMonths.map(month => ({
+        month: month,
+        streams: monthlyData[month].streams,
+      }));
+
+      // Royalty gap estimation (compare expected vs actual based on streams)
+      const royaltyGapEstimation = sortedMonths.map(month => ({
+        month: month,
+        expected: Math.round(monthlyData[month].streams * 0.004), // $0.004 per stream estimate
+        actual: Math.round(monthlyData[month].earnings),
+      }));
+
+      // Metadata stats for pie chart
+      const missingMetadataStats = [
+        { category: 'Spotify Matched', count: spotifyMatched },
+        { category: 'YouTube Matched', count: youtubeMatched },
+        { category: 'Unmatched', count: Math.max(0, unmatchedTracks) },
+      ];
+
+      // Platform breakdown from royalty entries
+      const platformBreakdown: Record<string, number> = {};
+      for (const entry of royaltyEntries) {
+        const platform = entry.store || 'Unknown';
+        platformBreakdown[platform] = (platformBreakdown[platform] || 0) + safeNumber(entry.earnings);
+      }
+
+      res.json({
+        metrics: [
+          { title: 'Total Tracks', value: totalTracks },
+          { title: 'Royalties Earned', value: Math.round(totalEarnings * 100) / 100 },
+          { title: 'Total Streams', value: totalStreams },
+          { title: 'YouTube Views', value: totalYouTubeViews },
+          { title: 'Spotify Matched', value: spotifyMatched },
+          { title: 'Unmatched Metadata', value: unmatchedTracks },
+        ],
+        charts: {
+          playbackFrequency,
+          royaltyGapEstimation,
+          missingMetadataStats,
+        },
+        summary: {
+          totalTracks,
+          totalEarnings: totalEarnings.toFixed(2),
+          totalStreams,
+          totalYouTubeViews,
+          spotifyMatched,
+          youtubeMatched,
+          unmatchedTracks,
+          totalPerformanceRoyalties: totalPerformanceRoyalties.toFixed(2),
+          prsStatements: prsStatements.length,
+          platformBreakdown,
+        },
+      });
+    } catch (error: any) {
+      console.error('Dashboard error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }

@@ -46,9 +46,9 @@ const DEFAULT_CHARTS: ChartData = {
 
 function formatMetricValue(title: string, value: number): string {
   if (title.toLowerCase().includes("royalties earned")) {
-    return `$${value.toLocaleString()}`;
+    return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
-  if (title.toLowerCase().includes("streams")) {
+  if (title.toLowerCase().includes("streams") || title.toLowerCase().includes("views")) {
     return value.toLocaleString();
   }
   return value.toString();
@@ -56,7 +56,7 @@ function formatMetricValue(title: string, value: number): string {
 
 export async function fetchMetricsData(): Promise<MetricsData> {
   try {
-    const response = await fetch("/mock_data.json");
+    const response = await fetch("/api/dashboard");
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -73,7 +73,7 @@ export async function fetchMetricsData(): Promise<MetricsData> {
       },
     };
   } catch (error) {
-    console.error("Error fetching metrics data:", error);
+    console.error("Error fetching dashboard data:", error);
     return {
       metrics: DEFAULT_METRICS,
       charts: DEFAULT_CHARTS,

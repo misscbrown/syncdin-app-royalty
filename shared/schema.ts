@@ -130,11 +130,11 @@ export type TrackWithStats = Track & {
   countryCount: number;
 };
 
-// Track Integrations table - stores Spotify and other service matches
+// Track Integrations table - stores Spotify, YouTube, and other service matches
 export const trackIntegrations = pgTable("track_integrations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   trackId: varchar("track_id").notNull().references(() => tracks.id),
-  provider: text("provider").notNull(), // 'spotify', 'apple_music', etc.
+  provider: text("provider").notNull(), // 'spotify', 'youtube', 'apple_music', etc.
   
   // Provider-specific IDs
   providerId: text("provider_id").notNull(),
@@ -149,13 +149,19 @@ export const trackIntegrations = pgTable("track_integrations", {
   
   // Match quality
   matchConfidence: decimal("match_confidence", { precision: 5, scale: 2 }),
-  matchMethod: text("match_method"), // 'isrc', 'name_artist', 'manual'
+  matchMethod: text("match_method"), // 'isrc', 'name_artist', 'title_artist_duration', 'title_artist_channel', 'fuzzy', 'manual'
+  matchSource: text("match_source"), // 'spotify', 'youtube', 'both'
   isVerified: text("is_verified").default("false"),
   
-  // Provider-specific data
+  // Provider-specific data (Spotify)
   popularity: integer("popularity"),
   durationMs: integer("duration_ms"),
   providerIsrc: text("provider_isrc"),
+  
+  // YouTube-specific data
+  viewCount: integer("view_count"),
+  channelName: text("channel_name"),
+  channelId: text("channel_id"),
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -184,6 +190,7 @@ export type TrackWithIntegrations = Track & {
   storeCount: number;
   countryCount: number;
   spotifyMatch?: TrackIntegration | null;
+  youtubeMatch?: TrackIntegration | null;
 };
 
 // ============================================

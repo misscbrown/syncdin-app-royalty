@@ -49,6 +49,15 @@ export interface IStorage {
   updateTrackIntegration(id: string, updates: Partial<InsertTrackIntegration>): Promise<TrackIntegration | undefined>;
   deleteTrackIntegration(id: string): Promise<void>;
   getTracksWithSpotifyStatus(): Promise<Array<Track & { spotifyMatched: boolean; spotifyId?: string; albumArt?: string }>>;
+  getTracksWithIntegrationStatus(): Promise<Array<Track & { 
+    spotifyMatched: boolean; 
+    spotifyId?: string; 
+    spotifyAlbumArt?: string;
+    youtubeMatched: boolean;
+    youtubeId?: string;
+    youtubeViewCount?: number;
+    matchSource?: string;
+  }>>;
   
   // PRS Statements
   getPrsStatement(id: string): Promise<PrsStatement | undefined>;
@@ -256,6 +265,52 @@ export class DatabaseStorage implements IStorage {
       ORDER BY t.created_at DESC
     `);
     return result.rows as Array<Track & { spotifyMatched: boolean; spotifyId?: string; albumArt?: string }>;
+  }
+
+  async getTracksWithIntegrationStatus(): Promise<Array<Track & { 
+    spotifyMatched: boolean; 
+    spotifyId?: string; 
+    spotifyAlbumArt?: string;
+    youtubeMatched: boolean;
+    youtubeId?: string;
+    youtubeViewCount?: number;
+    matchSource?: string;
+  }>> {
+    const result = await db.execute(sql`
+      SELECT 
+        t.id,
+        t.isrc,
+        t.title,
+        t.artist,
+        t.upc,
+        t.created_at as "createdAt",
+        CASE WHEN sp.id IS NOT NULL THEN true ELSE false END as "spotifyMatched",
+        sp.provider_id as "spotifyId",
+        sp.album_art as "spotifyAlbumArt",
+        sp.duration_ms as "spotifyDurationMs",
+        CASE WHEN yt.id IS NOT NULL THEN true ELSE false END as "youtubeMatched",
+        yt.provider_id as "youtubeId",
+        yt.view_count as "youtubeViewCount",
+        CASE 
+          WHEN sp.id IS NOT NULL AND yt.id IS NOT NULL THEN 'both'
+          WHEN sp.id IS NOT NULL THEN 'spotify'
+          WHEN yt.id IS NOT NULL THEN 'youtube'
+          ELSE 'none'
+        END as "matchSource"
+      FROM tracks t
+      LEFT JOIN track_integrations sp ON t.id = sp.track_id AND sp.provider = 'spotify'
+      LEFT JOIN track_integrations yt ON t.id = yt.track_id AND yt.provider = 'youtube'
+      ORDER BY t.created_at DESC
+    `);
+    return result.rows as Array<Track & { 
+      spotifyMatched: boolean; 
+      spotifyId?: string; 
+      spotifyAlbumArt?: string;
+      youtubeMatched: boolean;
+      youtubeId?: string;
+      youtubeViewCount?: number;
+      matchSource?: string;
+    }>;
   }
 
   // PRS Statements

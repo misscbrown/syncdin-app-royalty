@@ -125,11 +125,10 @@ export default function PlaybackAnalytics() {
     queryKey: ["/api/social-metrics"],
   });
 
-  const { data: tracksResponse, isLoading: tracksLoading } = useQuery<{ tracks: Track[] }>({
+  const { data: allTracks, isLoading: tracksLoading } = useQuery<Track[]>({
     queryKey: ["/api/tracks"],
     enabled: activeTab === "tracks",
   });
-  const allTracks = tracksResponse?.tracks;
 
   const [refreshingTrackId, setRefreshingTrackId] = useState<string | null>(null);
 

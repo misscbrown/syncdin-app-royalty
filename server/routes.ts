@@ -624,6 +624,142 @@ export async function registerRoutes(
     }
   });
 
+  // Re-match a track with Spotify (delete existing + match again)
+  app.post('/api/spotify/rematch/:trackId', async (req, res) => {
+    try {
+      const { trackId } = req.params;
+      
+      const track = await storage.getTrack(trackId);
+      if (!track) {
+        return res.status(404).json({ error: 'Track not found' });
+      }
+      
+      // Delete existing match if present
+      const existingMatch = await storage.getTrackIntegration(trackId, 'spotify');
+      if (existingMatch) {
+        await storage.deleteTrackIntegration(existingMatch.id);
+      }
+      
+      // Try to match with Spotify
+      const spotifyMatch = await matchTrack(track.isrc, track.title, track.artist);
+      
+      if (!spotifyMatch) {
+        return res.json({ 
+          success: false, 
+          message: 'No match found on Spotify' 
+        });
+      }
+      
+      // Calculate confidence based on ISRC match
+      const confidence = spotifyMatch.isrc === track.isrc ? 100 : 80;
+      const matchMethod = spotifyMatch.isrc === track.isrc ? 'isrc' : 'name_artist';
+      
+      // Store the new integration
+      const integration: InsertTrackIntegration = {
+        trackId,
+        provider: 'spotify',
+        providerId: spotifyMatch.spotifyId,
+        providerUri: spotifyMatch.spotifyUri,
+        matchedName: spotifyMatch.name,
+        matchedArtists: spotifyMatch.artists,
+        matchedAlbum: spotifyMatch.album,
+        albumArt: spotifyMatch.albumArt,
+        previewUrl: spotifyMatch.previewUrl,
+        matchConfidence: String(confidence),
+        matchMethod: matchMethod,
+        popularity: spotifyMatch.popularity,
+        durationMs: spotifyMatch.durationMs,
+        providerIsrc: spotifyMatch.isrc,
+      };
+      
+      const saved = await storage.createTrackIntegration(integration);
+      
+      res.json({ 
+        success: true, 
+        rematched: true,
+        confidence: confidence,
+        integration: saved 
+      });
+    } catch (error: any) {
+      console.error('Spotify rematch error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Batch re-match multiple tracks with Spotify
+  app.post('/api/spotify/rematch-batch', async (req, res) => {
+    try {
+      const { trackIds } = req.body;
+      
+      if (!Array.isArray(trackIds) || trackIds.length === 0) {
+        return res.status(400).json({ error: 'trackIds array is required' });
+      }
+      
+      const results = { matched: 0, failed: 0, details: [] as Array<{ trackId: string; status: string; spotifyId?: string }> };
+      
+      for (const trackId of trackIds) {
+        try {
+          const track = await storage.getTrack(trackId);
+          if (!track) {
+            results.failed++;
+            results.details.push({ trackId, status: 'not_found' });
+            continue;
+          }
+          
+          // Delete existing match if present
+          const existingMatch = await storage.getTrackIntegration(trackId, 'spotify');
+          if (existingMatch) {
+            await storage.deleteTrackIntegration(existingMatch.id);
+          }
+          
+          // Try to match
+          const spotifyMatch = await matchTrack(track.isrc, track.title, track.artist);
+          
+          if (!spotifyMatch) {
+            results.failed++;
+            results.details.push({ trackId, status: 'no_match' });
+            continue;
+          }
+          
+          const confidence = spotifyMatch.isrc === track.isrc ? 100 : 80;
+          const matchMethod = spotifyMatch.isrc === track.isrc ? 'isrc' : 'name_artist';
+          
+          const integration: InsertTrackIntegration = {
+            trackId,
+            provider: 'spotify',
+            providerId: spotifyMatch.spotifyId,
+            providerUri: spotifyMatch.spotifyUri,
+            matchedName: spotifyMatch.name,
+            matchedArtists: spotifyMatch.artists,
+            matchedAlbum: spotifyMatch.album,
+            albumArt: spotifyMatch.albumArt,
+            previewUrl: spotifyMatch.previewUrl,
+            matchConfidence: String(confidence),
+            matchMethod: matchMethod,
+            popularity: spotifyMatch.popularity,
+            durationMs: spotifyMatch.durationMs,
+            providerIsrc: spotifyMatch.isrc,
+          };
+          
+          await storage.createTrackIntegration(integration);
+          results.matched++;
+          results.details.push({ trackId, status: 'matched', spotifyId: spotifyMatch.spotifyId });
+          
+          // Rate limiting
+          await new Promise(resolve => setTimeout(resolve, 200));
+        } catch (err: any) {
+          results.failed++;
+          results.details.push({ trackId, status: 'error' });
+        }
+      }
+      
+      res.json(results);
+    } catch (error: any) {
+      console.error('Spotify batch rematch error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // =====================
   // YouTube Integration Routes
   // =====================
@@ -952,6 +1088,159 @@ export async function registerRoutes(
       await storage.deleteTrackIntegration(integration.id);
       res.json({ success: true });
     } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Re-match a track with YouTube (delete existing + match again with classification)
+  app.post('/api/youtube/rematch/:trackId', async (req, res) => {
+    try {
+      const { trackId } = req.params;
+      
+      const track = await storage.getTrack(trackId);
+      if (!track) {
+        return res.status(404).json({ error: 'Track not found' });
+      }
+      
+      // Delete existing match if present
+      const existingMatch = await storage.getTrackIntegration(trackId, 'youtube');
+      if (existingMatch) {
+        await storage.deleteTrackIntegration(existingMatch.id);
+      }
+      
+      // Get Spotify match for duration cross-reference
+      const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify');
+      const spotifyDurationMs = spotifyMatch?.durationMs || null;
+      
+      // Try to match with YouTube using multi-match (includes classification)
+      const multiResult = await matchTrackOnYouTubeMulti(track.title, track.artist, track.isrc, spotifyDurationMs);
+      
+      if (multiResult.matches.length === 0) {
+        return res.json({ 
+          success: false, 
+          message: 'No match found on YouTube' 
+        });
+      }
+      
+      // Use the best match (first one)
+      const primaryMatch = multiResult.matches[0];
+      
+      // Store the new integration with classification data
+      const integration: InsertTrackIntegration = {
+        trackId,
+        provider: 'youtube',
+        providerId: primaryMatch.videoId,
+        providerUri: primaryMatch.videoUrl || `https://www.youtube.com/watch?v=${primaryMatch.videoId}`,
+        matchedName: primaryMatch.title,
+        matchedArtists: [primaryMatch.channelTitle],
+        albumArt: primaryMatch.thumbnail,
+        matchConfidence: String(primaryMatch.matchConfidence),
+        matchMethod: primaryMatch.matchMethod,
+        matchSource: 'youtube',
+        viewCount: primaryMatch.viewCount,
+        channelName: primaryMatch.channelTitle,
+        channelId: primaryMatch.channelId,
+        durationMs: primaryMatch.durationMs,
+        sourceType: primaryMatch.sourceType || 'OTHER',
+        identityConfidence: primaryMatch.identityConfidence || 'LOW',
+        performanceWeight: primaryMatch.performanceWeight || 'LOW',
+        videoPublishedAt: primaryMatch.publishedAt,
+      };
+      
+      const saved = await storage.createTrackIntegration(integration);
+      
+      res.json({ 
+        success: true, 
+        rematched: true,
+        confidence: primaryMatch.matchConfidence,
+        sourceType: primaryMatch.sourceType,
+        identityConfidence: primaryMatch.identityConfidence,
+        performanceWeight: primaryMatch.performanceWeight,
+        integration: saved 
+      });
+    } catch (error: any) {
+      console.error('YouTube rematch error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Batch re-match multiple tracks with YouTube (with classification)
+  app.post('/api/youtube/rematch-batch', async (req, res) => {
+    try {
+      const { trackIds } = req.body;
+      
+      if (!Array.isArray(trackIds) || trackIds.length === 0) {
+        return res.status(400).json({ error: 'trackIds array is required' });
+      }
+      
+      const results = { matched: 0, failed: 0, details: [] as Array<{ trackId: string; status: string; youtubeId?: string; sourceType?: string }> };
+      
+      for (const trackId of trackIds) {
+        try {
+          const track = await storage.getTrack(trackId);
+          if (!track) {
+            results.failed++;
+            results.details.push({ trackId, status: 'not_found' });
+            continue;
+          }
+          
+          // Delete existing match if present
+          const existingMatch = await storage.getTrackIntegration(trackId, 'youtube');
+          if (existingMatch) {
+            await storage.deleteTrackIntegration(existingMatch.id);
+          }
+          
+          // Get Spotify duration for cross-reference
+          const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify');
+          const spotifyDurationMs = spotifyMatch?.durationMs || null;
+          
+          // Try to match with multi-match
+          const multiResult = await matchTrackOnYouTubeMulti(track.title, track.artist, track.isrc, spotifyDurationMs);
+          
+          if (multiResult.matches.length === 0) {
+            results.failed++;
+            results.details.push({ trackId, status: 'no_match' });
+            continue;
+          }
+          
+          const primaryMatch = multiResult.matches[0];
+          
+          const integration: InsertTrackIntegration = {
+            trackId,
+            provider: 'youtube',
+            providerId: primaryMatch.videoId,
+            providerUri: primaryMatch.videoUrl || `https://www.youtube.com/watch?v=${primaryMatch.videoId}`,
+            matchedName: primaryMatch.title,
+            matchedArtists: [primaryMatch.channelTitle],
+            albumArt: primaryMatch.thumbnail,
+            matchConfidence: String(primaryMatch.matchConfidence),
+            matchMethod: primaryMatch.matchMethod,
+            matchSource: 'youtube',
+            viewCount: primaryMatch.viewCount,
+            channelName: primaryMatch.channelTitle,
+            channelId: primaryMatch.channelId,
+            durationMs: primaryMatch.durationMs,
+            sourceType: primaryMatch.sourceType || 'OTHER',
+            identityConfidence: primaryMatch.identityConfidence || 'LOW',
+            performanceWeight: primaryMatch.performanceWeight || 'LOW',
+            videoPublishedAt: primaryMatch.publishedAt,
+          };
+          
+          await storage.createTrackIntegration(integration);
+          results.matched++;
+          results.details.push({ trackId, status: 'matched', youtubeId: primaryMatch.videoId, sourceType: primaryMatch.sourceType });
+          
+          // Rate limiting - 500ms delay to respect YouTube API quotas
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (err: any) {
+          results.failed++;
+          results.details.push({ trackId, status: 'error' });
+        }
+      }
+      
+      res.json(results);
+    } catch (error: any) {
+      console.error('YouTube batch rematch error:', error);
       res.status(500).json({ error: error.message });
     }
   });

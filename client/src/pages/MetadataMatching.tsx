@@ -229,6 +229,107 @@ export default function MetadataMatching() {
     },
   });
 
+  const rematchSpotifyMutation = useMutation({
+    mutationFn: async (trackId: string) => {
+      const response = await apiRequest('POST', `/api/spotify/rematch/${trackId}`);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations/tracks'] });
+      if (data.success) {
+        toast({
+          title: "Spotify re-match complete",
+          description: `Re-matched with ${data.confidence}% confidence`,
+        });
+      } else {
+        toast({
+          title: "No match found",
+          description: "Could not find this track on Spotify",
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Re-match failed",
+        description: error.message || "Failed to re-match track",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const rematchYouTubeMutation = useMutation({
+    mutationFn: async (trackId: string) => {
+      const response = await apiRequest('POST', `/api/youtube/rematch/${trackId}`);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations/tracks'] });
+      if (data.success) {
+        const sourceLabel = data.sourceType ? ` (${data.sourceType.replace(/_/g, ' ').toLowerCase()})` : '';
+        toast({
+          title: "YouTube re-match complete",
+          description: `Re-matched with ${data.confidence}% confidence${sourceLabel}`,
+        });
+      } else {
+        toast({
+          title: "No match found",
+          description: "Could not find this track on YouTube",
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Re-match failed",
+        description: error.message || "Failed to re-match track",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const rematchSpotifyBatchMutation = useMutation({
+    mutationFn: async (trackIds: string[]) => {
+      const response = await apiRequest('POST', '/api/spotify/rematch-batch', { trackIds });
+      return response.json();
+    },
+    onSuccess: (data: { matched: number; failed: number }) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations/tracks'] });
+      toast({
+        title: "Spotify batch re-match complete",
+        description: `Re-matched: ${data.matched}, Failed: ${data.failed}`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Batch re-match failed",
+        description: error.message || "Failed to re-match tracks",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const rematchYouTubeBatchMutation = useMutation({
+    mutationFn: async (trackIds: string[]) => {
+      const response = await apiRequest('POST', '/api/youtube/rematch-batch', { trackIds });
+      return response.json();
+    },
+    onSuccess: (data: { matched: number; failed: number }) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations/tracks'] });
+      toast({
+        title: "YouTube batch re-match complete",
+        description: `Re-matched: ${data.matched}, Failed: ${data.failed}. Classification data updated.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Batch re-match failed",
+        description: error.message || "Failed to re-match tracks",
+        variant: "destructive",
+      });
+    },
+  });
+
   const filteredTracks = tracks.filter(track => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
@@ -307,7 +408,25 @@ export default function MetadataMatching() {
     matchYouTubeBatchMutation.mutate(unmatchedIds);
   };
 
-  const isBatchPending = matchSpotifyBatchMutation.isPending || matchYouTubeBatchMutation.isPending;
+  const handleRematchAllSpotify = () => {
+    const matchedIds = tracks.filter(t => t.spotifyMatched).map(t => t.id);
+    if (matchedIds.length === 0) {
+      toast({ title: "No tracks to re-match", description: "No tracks are matched with Spotify" });
+      return;
+    }
+    rematchSpotifyBatchMutation.mutate(matchedIds);
+  };
+
+  const handleRematchAllYouTube = () => {
+    const matchedIds = tracks.filter(t => t.youtubeMatched).map(t => t.id);
+    if (matchedIds.length === 0) {
+      toast({ title: "No tracks to re-match", description: "No tracks are matched with YouTube" });
+      return;
+    }
+    rematchYouTubeBatchMutation.mutate(matchedIds);
+  };
+
+  const isBatchPending = matchSpotifyBatchMutation.isPending || matchYouTubeBatchMutation.isPending || rematchSpotifyBatchMutation.isPending || rematchYouTubeBatchMutation.isPending;
 
   return (
     <AppLayout>
@@ -501,6 +620,50 @@ export default function MetadataMatching() {
                       <SiYoutube className="w-4 h-4 mr-2" />
                       All YouTube
                     </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleRematchAllSpotify}
+                          disabled={spotifyMatchedCount === 0 || isBatchPending}
+                          className="border-[#1DB954]/50 text-[#1DB954]"
+                          data-testid="button-rematch-all-spotify"
+                        >
+                          {rematchSpotifyBatchMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                          )}
+                          Re-match Spotify
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-xs">Re-match all {spotifyMatchedCount} Spotify tracks</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleRematchAllYouTube}
+                          disabled={youtubeMatchedCount === 0 || isBatchPending}
+                          className="border-[#FF0000]/50 text-[#FF0000]"
+                          data-testid="button-rematch-all-youtube"
+                        >
+                          {rematchYouTubeBatchMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                          )}
+                          Re-match YouTube
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-xs">Re-match all {youtubeMatchedCount} YouTube tracks (updates classification)</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
               </CardHeader>
@@ -685,30 +848,76 @@ export default function MetadataMatching() {
                               )}
                             </td>
                             <td className="py-3 px-4">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 {track.spotifyMatched && track.spotifyId && (
-                                  <a
-                                    href={`https://open.spotify.com/track/${track.spotifyId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-[#1DB954] hover:underline text-xs flex items-center gap-1"
-                                    data-testid={`link-spotify-${track.id}`}
-                                  >
-                                    <ExternalLink className="w-3 h-3" />
-                                    Spotify
-                                  </a>
+                                  <>
+                                    <a
+                                      href={`https://open.spotify.com/track/${track.spotifyId}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[#1DB954] hover:underline text-xs flex items-center gap-1"
+                                      data-testid={`link-spotify-${track.id}`}
+                                    >
+                                      <ExternalLink className="w-3 h-3" />
+                                      Spotify
+                                    </a>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => rematchSpotifyMutation.mutate(track.id)}
+                                          disabled={rematchSpotifyMutation.isPending}
+                                          className="h-6 px-1.5 text-[#1DB954]/70 hover:text-[#1DB954]"
+                                          data-testid={`button-rematch-spotify-${track.id}`}
+                                        >
+                                          {rematchSpotifyMutation.isPending ? (
+                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                          ) : (
+                                            <RefreshCw className="w-3 h-3" />
+                                          )}
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">
+                                        <p className="text-xs">Re-match with Spotify</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </>
                                 )}
                                 {track.youtubeMatched && track.youtubeId && (
-                                  <a
-                                    href={`https://www.youtube.com/watch?v=${track.youtubeId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-[#FF0000] hover:underline text-xs flex items-center gap-1"
-                                    data-testid={`link-youtube-${track.id}`}
-                                  >
-                                    <ExternalLink className="w-3 h-3" />
-                                    YouTube
-                                  </a>
+                                  <>
+                                    <a
+                                      href={`https://www.youtube.com/watch?v=${track.youtubeId}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[#FF0000] hover:underline text-xs flex items-center gap-1"
+                                      data-testid={`link-youtube-${track.id}`}
+                                    >
+                                      <ExternalLink className="w-3 h-3" />
+                                      YouTube
+                                    </a>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => rematchYouTubeMutation.mutate(track.id)}
+                                          disabled={rematchYouTubeMutation.isPending}
+                                          className="h-6 px-1.5 text-[#FF0000]/70 hover:text-[#FF0000]"
+                                          data-testid={`button-rematch-youtube-${track.id}`}
+                                        >
+                                          {rematchYouTubeMutation.isPending ? (
+                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                          ) : (
+                                            <RefreshCw className="w-3 h-3" />
+                                          )}
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">
+                                        <p className="text-xs">Re-match with YouTube (updates classification)</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </>
                                 )}
                                 {!track.spotifyMatched && (
                                   <Button

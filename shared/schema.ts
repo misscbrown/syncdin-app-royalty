@@ -163,6 +163,12 @@ export const trackIntegrations = pgTable("track_integrations", {
   channelName: text("channel_name"),
   channelId: text("channel_id"),
   
+  // YouTube classification (for multi-match support)
+  sourceType: text("source_type"), // 'OFFICIAL_ARTIST_CHANNEL', 'LABEL_CHANNEL', 'TOPIC_VIDEO', 'OTHER'
+  identityConfidence: text("identity_confidence"), // 'HIGH', 'MEDIUM', 'LOW'
+  performanceWeight: text("performance_weight"), // 'HIGH', 'MEDIUM', 'LOW'
+  videoPublishedAt: text("video_published_at"),
+  
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

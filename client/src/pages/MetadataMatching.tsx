@@ -19,7 +19,17 @@ import {
   RefreshCw,
   ExternalLink,
   Eye,
+  Info,
+  User,
+  Building2,
+  Radio,
+  HelpCircle,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { SiSpotify, SiYoutube } from "react-icons/si";
 
 interface Track {
@@ -36,8 +46,46 @@ interface Track {
   youtubeMatched: boolean;
   youtubeId?: string;
   youtubeViewCount?: number;
+  youtubeSourceType?: 'OFFICIAL_ARTIST_CHANNEL' | 'LABEL_CHANNEL' | 'TOPIC_VIDEO' | 'OTHER';
+  youtubeIdentityConfidence?: 'HIGH' | 'MEDIUM' | 'LOW';
+  youtubePerformanceWeight?: 'HIGH' | 'MEDIUM' | 'LOW';
   matchSource?: string;
 }
+
+type SourceType = 'OFFICIAL_ARTIST_CHANNEL' | 'LABEL_CHANNEL' | 'TOPIC_VIDEO' | 'OTHER';
+
+const SOURCE_TYPE_CONFIG: Record<SourceType, { label: string; icon: typeof User; color: string; description: string }> = {
+  'OFFICIAL_ARTIST_CHANNEL': {
+    label: 'Official Video',
+    icon: User,
+    color: 'text-[#FF0000] bg-[#FF0000]/10 border-[#FF0000]/30',
+    description: 'Official artist channel or VEVO - highest performance relevance'
+  },
+  'LABEL_CHANNEL': {
+    label: 'Label Upload',
+    icon: Building2,
+    color: 'text-blue-400 bg-blue-400/10 border-blue-400/30',
+    description: 'Official record label channel - high identity confidence'
+  },
+  'TOPIC_VIDEO': {
+    label: 'Topic Video',
+    icon: Radio,
+    color: 'text-gray-400 bg-gray-400/10 border-gray-400/30',
+    description: 'YouTube auto-generated - high identity confidence, lower performance relevance'
+  },
+  'OTHER': {
+    label: 'Other',
+    icon: HelpCircle,
+    color: 'text-muted-foreground bg-muted border-border',
+    description: 'Unverified source - may require manual review'
+  },
+};
+
+const CONFIDENCE_COLORS = {
+  'HIGH': 'text-green-400',
+  'MEDIUM': 'text-yellow-400',
+  'LOW': 'text-red-400',
+};
 
 interface ServiceStatus {
   connected: boolean;
@@ -567,10 +615,46 @@ export default function MetadataMatching() {
                             </td>
                             <td className="py-3 px-4">
                               {track.youtubeMatched ? (
-                                <Badge variant="outline" className="bg-[#FF0000]/10 text-[#FF0000] border-[#FF0000]/30">
-                                  <SiYoutube className="w-3 h-3 mr-1" />
-                                  Matched
-                                </Badge>
+                                <div className="flex items-center gap-1">
+                                  {track.youtubeSourceType && SOURCE_TYPE_CONFIG[track.youtubeSourceType] ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge 
+                                          variant="outline" 
+                                          className={`${SOURCE_TYPE_CONFIG[track.youtubeSourceType].color} cursor-help`}
+                                          data-testid={`badge-youtube-source-${track.id}`}
+                                        >
+                                          {(() => {
+                                            const IconComponent = SOURCE_TYPE_CONFIG[track.youtubeSourceType!].icon;
+                                            return <IconComponent className="w-3 h-3 mr-1" />;
+                                          })()}
+                                          {SOURCE_TYPE_CONFIG[track.youtubeSourceType].label}
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top" className="max-w-xs">
+                                        <div className="space-y-1">
+                                          <p className="font-medium">{SOURCE_TYPE_CONFIG[track.youtubeSourceType].label}</p>
+                                          <p className="text-xs text-muted-foreground">{SOURCE_TYPE_CONFIG[track.youtubeSourceType].description}</p>
+                                          {track.youtubeIdentityConfidence && (
+                                            <p className="text-xs">
+                                              Identity: <span className={CONFIDENCE_COLORS[track.youtubeIdentityConfidence]}>{track.youtubeIdentityConfidence}</span>
+                                            </p>
+                                          )}
+                                          {track.youtubePerformanceWeight && (
+                                            <p className="text-xs">
+                                              Performance: <span className={CONFIDENCE_COLORS[track.youtubePerformanceWeight]}>{track.youtubePerformanceWeight}</span>
+                                            </p>
+                                          )}
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <Badge variant="outline" className="bg-[#FF0000]/10 text-[#FF0000] border-[#FF0000]/30">
+                                      <SiYoutube className="w-3 h-3 mr-1" />
+                                      Matched
+                                    </Badge>
+                                  )}
+                                </div>
                               ) : (
                                 <Badge variant="outline" className="bg-muted text-muted-foreground">
                                   <XCircle className="w-3 h-3 mr-1" />
@@ -580,10 +664,22 @@ export default function MetadataMatching() {
                             </td>
                             <td className="py-3 px-4">
                               {track.youtubeViewCount ? (
-                                <div className="flex items-center gap-1 text-muted-foreground">
-                                  <Eye className="w-3 h-3" />
-                                  <span className="text-sm">{formatViewCount(track.youtubeViewCount)}</span>
-                                </div>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="flex items-center gap-1 text-muted-foreground cursor-help" data-testid={`views-${track.id}`}>
+                                      <Eye className="w-3 h-3" />
+                                      <span className="text-sm">{formatViewCount(track.youtubeViewCount)}</span>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-xs">
+                                    <div className="space-y-1">
+                                      <p className="font-medium">Usage Signal</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        View count reflects exposure, not royalty payout. Use to identify tracks with high activity vs. reported income.
+                                      </p>
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
                               ) : (
                                 <span className="text-muted-foreground text-sm">—</span>
                               )}

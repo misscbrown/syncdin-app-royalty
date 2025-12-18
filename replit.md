@@ -53,6 +53,10 @@ A full-stack music royalty tracking application with React + Vite + TailwindCSS 
   - matchConfidence, matchMethod (isrc/title_artist_duration/title_artist_channel/fuzzy), matchSource
   - isVerified, popularity, durationMs, providerIsrc
   - viewCount, channelName, channelId (YouTube-specific)
+  - sourceType (OFFICIAL_ARTIST_CHANNEL/LABEL_CHANNEL/TOPIC_VIDEO/OTHER)
+  - identityConfidence (HIGH/MEDIUM/LOW) - how certain this is the correct track
+  - performanceWeight (HIGH/MEDIUM/LOW) - relevance for performance analytics
+  - videoPublishedAt (YouTube video publish date)
 
 - **prs_statements** - Uploaded PRS performance royalty statement files
   - id, filename, originalName, statementPeriod, statementDate
@@ -92,9 +96,11 @@ A full-stack music royalty tracking application with React + Vite + TailwindCSS 
 
 ### YouTube Data API v3 Integration
 - `GET /api/youtube/status` - Check YouTube API connection status
-- `POST /api/youtube/match/:trackId` - Match single track with YouTube
+- `POST /api/youtube/match/:trackId` - Match single track with YouTube (includes classification)
 - `POST /api/youtube/match-batch` - Match multiple tracks (rate-limited, 500ms delay)
 - `GET /api/tracks/:id/youtube` - Get YouTube integration for a track
+- `GET /api/tracks/:id/youtube/matches` - Get all potential YouTube matches with classification
+- `POST /api/tracks/:id/youtube/matches` - Store a specific YouTube match from potential matches
 - `DELETE /api/tracks/:id/youtube` - Remove YouTube match for re-matching
 - `GET /api/integrations/tracks` - Get tracks with both Spotify and YouTube status
 - `GET /api/tracks/:id/integrations` - Get all integrations for a track
@@ -198,3 +204,10 @@ npm run db:push    # Push schema changes to database
   - YouTube view count tracking as exposure signal
   - Unified Metadata Matching UI showing both Spotify and YouTube matches
   - Rate-limited batch matching to respect API quotas
+- **Enhanced YouTube classification system** (Dec 2025):
+  - Multiple YouTube matches per track supported
+  - Source type classification: OFFICIAL_ARTIST_CHANNEL, LABEL_CHANNEL, TOPIC_VIDEO, OTHER
+  - Separate identity confidence and performance weight scoring
+  - UI badges with tooltips explaining source type and confidence levels
+  - YouTube views displayed as "usage signals" (separate from financial data)
+  - Modular architecture ready for additional metadata sources (Radio APIs, sync databases)

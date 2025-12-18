@@ -43,6 +43,7 @@ export interface IStorage {
   
   // Track Integrations
   getTrackIntegration(trackId: string, provider: string): Promise<TrackIntegration | undefined>;
+  getTrackIntegrations(trackId: string, provider?: string): Promise<TrackIntegration[]>;
   getTrackIntegrationsByTrack(trackId: string): Promise<TrackIntegration[]>;
   getAllTrackIntegrations(provider?: string): Promise<TrackIntegration[]>;
   createTrackIntegration(integration: InsertTrackIntegration): Promise<TrackIntegration>;
@@ -56,6 +57,9 @@ export interface IStorage {
     youtubeMatched: boolean;
     youtubeId?: string;
     youtubeViewCount?: number;
+    youtubeSourceType?: string;
+    youtubeIdentityConfidence?: string;
+    youtubePerformanceWeight?: string;
     matchSource?: string;
   }>>;
   
@@ -219,6 +223,14 @@ export class DatabaseStorage implements IStorage {
     return integration || undefined;
   }
 
+  async getTrackIntegrations(trackId: string, provider?: string): Promise<TrackIntegration[]> {
+    if (provider) {
+      return await db.select().from(trackIntegrations)
+        .where(and(eq(trackIntegrations.trackId, trackId), eq(trackIntegrations.provider, provider)));
+    }
+    return await db.select().from(trackIntegrations).where(eq(trackIntegrations.trackId, trackId));
+  }
+
   async getTrackIntegrationsByTrack(trackId: string): Promise<TrackIntegration[]> {
     return await db.select().from(trackIntegrations).where(eq(trackIntegrations.trackId, trackId));
   }
@@ -274,6 +286,9 @@ export class DatabaseStorage implements IStorage {
     youtubeMatched: boolean;
     youtubeId?: string;
     youtubeViewCount?: number;
+    youtubeSourceType?: string;
+    youtubeIdentityConfidence?: string;
+    youtubePerformanceWeight?: string;
     matchSource?: string;
   }>> {
     const result = await db.execute(sql`
@@ -291,6 +306,9 @@ export class DatabaseStorage implements IStorage {
         CASE WHEN yt.id IS NOT NULL THEN true ELSE false END as "youtubeMatched",
         yt.provider_id as "youtubeId",
         yt.view_count as "youtubeViewCount",
+        yt.source_type as "youtubeSourceType",
+        yt.identity_confidence as "youtubeIdentityConfidence",
+        yt.performance_weight as "youtubePerformanceWeight",
         CASE 
           WHEN sp.id IS NOT NULL AND yt.id IS NOT NULL THEN 'both'
           WHEN sp.id IS NOT NULL THEN 'spotify'
@@ -309,6 +327,9 @@ export class DatabaseStorage implements IStorage {
       youtubeMatched: boolean;
       youtubeId?: string;
       youtubeViewCount?: number;
+      youtubeSourceType?: string;
+      youtubeIdentityConfidence?: string;
+      youtubePerformanceWeight?: string;
       matchSource?: string;
     }>;
   }

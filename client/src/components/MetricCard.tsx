@@ -1,5 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Info } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface MetricCardProps {
   title: string;
@@ -10,7 +15,11 @@ interface MetricCardProps {
   cardColor?: string;
   textColor?: string;
   accentColor?: string;
+  subtitle?: string;
 }
+
+const USAGE_SIGNAL_METRICS = ["YouTube Views"];
+const USAGE_SIGNAL_TOOLTIP = "Usage signal only - reflects exposure, not royalty payout";
 
 export default function MetricCard({
   title,
@@ -21,7 +30,9 @@ export default function MetricCard({
   cardColor = "bg-card",
   textColor = "text-foreground",
   accentColor = "text-primary",
+  subtitle,
 }: MetricCardProps) {
+  const isUsageSignal = USAGE_SIGNAL_METRICS.includes(title);
   const getTrendIcon = () => {
     if (!trend) return null;
     const iconClass = "w-4 h-4";
@@ -43,9 +54,21 @@ export default function MetricCard({
       data-testid={`card-metric-${title.toLowerCase().replace(/\s+/g, '-')}`}
     >
       <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {title}
-        </CardTitle>
+        <div className="flex items-center gap-1">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            {title}
+          </CardTitle>
+          {isUsageSignal && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="w-3 h-3 text-muted-foreground cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                <p className="text-xs">{USAGE_SIGNAL_TOOLTIP}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
         {isFlagged && (
           <span className={`text-xs px-2 py-0.5 rounded-full bg-primary/20 ${accentColor} font-medium`}>
             Alert

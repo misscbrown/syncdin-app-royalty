@@ -216,3 +216,9 @@ npm run db:push    # Push schema changes to database
   - Batch re-match all matched tracks with "Re-match Spotify" and "Re-match YouTube" buttons
   - YouTube re-match updates classification data (source type, identity confidence, performance weight)
   - Rate limiting: 200ms for Spotify, 500ms for YouTube batch operations
+- **Multi-match storage with automatic primary selection** (Dec 2025):
+  - All valid YouTube matches stored with `isPrimary` flag in track_integrations
+  - Priority logic: When confidences are within 10%, prefer Official Artist Channel > Label Channel > Topic Video
+  - GET /api/tracks/:id/youtube returns primary match plus all secondary matches
+  - Expandable secondary matches in UI with chevron button to toggle visibility
+  - Topic videos retained as identity confirmation while Official/Label prioritized for performance tracking

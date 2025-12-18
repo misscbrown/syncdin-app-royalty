@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import AppLayout from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,8 @@ import {
   Building2,
   Radio,
   HelpCircle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
   Tooltip,
@@ -99,6 +101,19 @@ interface MatchResult {
   details: Array<{ trackId: string; status: string; spotifyId?: string; youtubeId?: string; confidence?: number }>;
 }
 
+interface SecondaryYouTubeMatch {
+  id: string;
+  providerId: string;
+  providerUri?: string;
+  matchedName?: string;
+  channelName?: string;
+  viewCount?: number;
+  sourceType?: SourceType;
+  identityConfidence?: 'HIGH' | 'MEDIUM' | 'LOW';
+  performanceWeight?: 'HIGH' | 'MEDIUM' | 'LOW';
+  matchConfidence?: string;
+}
+
 function formatViewCount(count: number | undefined | null): string {
   if (!count) return "—";
   if (count >= 1000000000) return `${(count / 1000000000).toFixed(1)}B`;
@@ -111,7 +126,44 @@ export default function MetadataMatching() {
   const [activeTab, setActiveTab] = useState("matching");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTracks, setSelectedTracks] = useState<Set<string>>(new Set());
+  const [expandedTracks, setExpandedTracks] = useState<Set<string>>(new Set());
+  const [secondaryMatches, setSecondaryMatches] = useState<Record<string, SecondaryYouTubeMatch[]>>({});
+  const [loadingSecondary, setLoadingSecondary] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  const toggleExpanded = async (trackId: string) => {
+    const newExpanded = new Set(expandedTracks);
+    if (newExpanded.has(trackId)) {
+      newExpanded.delete(trackId);
+    } else {
+      newExpanded.add(trackId);
+      if (secondaryMatches[trackId] === undefined) {
+        setLoadingSecondary(prev => new Set(Array.from(prev).concat(trackId)));
+        try {
+          const response = await fetch(`/api/tracks/${trackId}/youtube`);
+          if (response.ok) {
+            const data = await response.json();
+            setSecondaryMatches(prev => ({ 
+              ...prev, 
+              [trackId]: data.secondaryMatches || [] 
+            }));
+          } else {
+            setSecondaryMatches(prev => ({ ...prev, [trackId]: [] }));
+          }
+        } catch (error) {
+          console.error('Failed to fetch secondary matches:', error);
+          setSecondaryMatches(prev => ({ ...prev, [trackId]: [] }));
+        } finally {
+          setLoadingSecondary(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(trackId);
+            return newSet;
+          });
+        }
+      }
+    }
+    setExpandedTracks(newExpanded);
+  };
 
   const { data: spotifyStatus, isLoading: spotifyStatusLoading } = useQuery<ServiceStatus>({
     queryKey: ['/api/spotify/status'],
@@ -718,9 +770,13 @@ export default function MetadataMatching() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredTracks.map((track) => (
+                        {filteredTracks.map((track) => {
+                          const trackSecondaryMatches = secondaryMatches[track.id] || [];
+                          const isExpanded = expandedTracks.has(track.id);
+                          const isLoading = loadingSecondary.has(track.id);
+                          return (
+                          <Fragment key={track.id}>
                           <tr 
-                            key={track.id} 
                             className="border-b border-border/50 hover:bg-muted/30 transition-colors"
                             data-testid={`row-track-${track.id}`}
                           >
@@ -917,6 +973,30 @@ export default function MetadataMatching() {
                                         <p className="text-xs">Re-match with YouTube (updates classification)</p>
                                       </TooltipContent>
                                     </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => toggleExpanded(track.id)}
+                                          className="h-6 px-1.5 text-muted-foreground hover:text-foreground"
+                                          data-testid={`button-expand-youtube-${track.id}`}
+                                        >
+                                          {isLoading ? (
+                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                          ) : isExpanded ? (
+                                            <ChevronUp className="w-3 h-3" />
+                                          ) : (
+                                            <ChevronDown className="w-3 h-3" />
+                                          )}
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">
+                                        <p className="text-xs">
+                                          {isExpanded ? 'Hide' : 'Show'} secondary YouTube matches
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
                                   </>
                                 )}
                                 {!track.spotifyMatched && (
@@ -954,7 +1034,93 @@ export default function MetadataMatching() {
                               </div>
                             </td>
                           </tr>
-                        ))}
+                          {isExpanded && track.youtubeMatched && (
+                            <tr className="bg-muted/30 border-b border-border">
+                              <td colSpan={7} className="py-3 px-4">
+                                <div className="pl-12">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <SiYoutube className="w-4 h-4 text-[#FF0000]" />
+                                    <span className="text-sm font-medium text-muted-foreground">
+                                      Secondary YouTube Matches
+                                    </span>
+                                    {trackSecondaryMatches.length === 0 && !isLoading && (
+                                      <span className="text-xs text-muted-foreground/70 italic">No secondary matches found</span>
+                                    )}
+                                  </div>
+                                  {isLoading ? (
+                                    <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                      Loading secondary matches...
+                                    </div>
+                                  ) : trackSecondaryMatches.length > 0 ? (
+                                    <div className="space-y-2">
+                                      {trackSecondaryMatches.map((match, idx) => (
+                                        <div 
+                                          key={match.id || idx} 
+                                          className="flex items-center gap-3 p-2 rounded bg-muted/50 border border-border/50"
+                                          data-testid={`secondary-match-${track.id}-${idx}`}
+                                        >
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              <a
+                                                href={match.providerUri || `https://www.youtube.com/watch?v=${match.providerId}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-sm font-medium text-foreground hover:text-[#FF0000] truncate"
+                                              >
+                                                {match.matchedName || 'Unknown Title'}
+                                              </a>
+                                              {match.sourceType && SOURCE_TYPE_CONFIG[match.sourceType] && (
+                                                <Badge 
+                                                  variant="outline" 
+                                                  className={`text-xs ${SOURCE_TYPE_CONFIG[match.sourceType].color}`}
+                                                >
+                                                  {(() => {
+                                                    const IconComponent = SOURCE_TYPE_CONFIG[match.sourceType!].icon;
+                                                    return <IconComponent className="w-2 h-2 mr-1" />;
+                                                  })()}
+                                                  {SOURCE_TYPE_CONFIG[match.sourceType].label}
+                                                </Badge>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                                              {match.channelName && (
+                                                <span>{match.channelName}</span>
+                                              )}
+                                              {match.viewCount && (
+                                                <span className="flex items-center gap-1">
+                                                  <Eye className="w-3 h-3" />
+                                                  {formatViewCount(match.viewCount)}
+                                                </span>
+                                              )}
+                                              {match.matchConfidence && (
+                                                <span>Confidence: {Math.round(parseFloat(match.matchConfidence))}%</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <a
+                                            href={match.providerUri || `https://www.youtube.com/watch?v=${match.providerId}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-[#FF0000] hover:underline text-xs flex items-center gap-1 shrink-0"
+                                          >
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-muted-foreground/70 italic">
+                                      Only the primary match was found for this track.
+                                    </p>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                      })}
                       </tbody>
                     </table>
                   </div>

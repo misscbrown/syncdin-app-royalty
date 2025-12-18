@@ -971,14 +971,20 @@ export async function registerRoutes(
     }
   });
 
-  // Get YouTube integration for a track
+  // Get YouTube integration for a track (returns primary + all matches info)
   app.get('/api/tracks/:id/youtube', async (req, res) => {
     try {
-      const integration = await storage.getTrackIntegration(req.params.id, 'youtube');
-      if (!integration) {
+      const allMatches = await storage.getTrackIntegrations(req.params.id, 'youtube');
+      if (allMatches.length === 0) {
         return res.status(404).json({ error: 'No YouTube match found' });
       }
-      res.json(integration);
+      const primary = allMatches.find(m => m.isPrimary === 'true') || allMatches[0];
+      const secondary = allMatches.filter(m => m.id !== primary.id);
+      res.json({
+        ...primary,
+        secondaryMatches: secondary,
+        totalMatches: allMatches.length,
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

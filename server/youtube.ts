@@ -465,12 +465,33 @@ export async function matchTrackOnYouTubeMulti(
     }
   }
 
-  // Sort by: identity confidence (HIGH first), then by match confidence
+  // Sort by: 
+  // 1. Match confidence (highest first)
+  // 2. When match confidence is similar (within 10%), prefer Official/Label over Topic
+  // 3. Then by identity confidence
+  const sourceTypeOrder: Record<YouTubeSourceType, number> = { 
+    OFFICIAL_ARTIST_CHANNEL: 4, 
+    LABEL_CHANNEL: 3, 
+    TOPIC_VIDEO: 2, 
+    OTHER: 1 
+  };
   const confidenceOrder = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+  
   classifiedMatches.sort((a, b) => {
-    const confDiff = confidenceOrder[b.identityConfidence] - confidenceOrder[a.identityConfidence];
-    if (confDiff !== 0) return confDiff;
-    return b.matchConfidence - a.matchConfidence;
+    // If match confidences are within 10 points, prioritize by source type for primary selection
+    const confidenceDiff = Math.abs(a.matchConfidence - b.matchConfidence);
+    if (confidenceDiff <= 10) {
+      // When similar confidence, prefer Official/Label over Topic for performance
+      const sourceTypeDiff = sourceTypeOrder[b.sourceType] - sourceTypeOrder[a.sourceType];
+      if (sourceTypeDiff !== 0) return sourceTypeDiff;
+    }
+    
+    // Otherwise, sort by raw match confidence
+    const matchConfDiff = b.matchConfidence - a.matchConfidence;
+    if (matchConfDiff !== 0) return matchConfDiff;
+    
+    // Tie-breaker: identity confidence
+    return confidenceOrder[b.identityConfidence] - confidenceOrder[a.identityConfidence];
   });
 
   return { matches: classifiedMatches, matchSource: "youtube" };

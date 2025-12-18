@@ -222,3 +222,12 @@ npm run db:push    # Push schema changes to database
   - GET /api/tracks/:id/youtube returns primary match plus all secondary matches
   - Expandable secondary matches in UI with chevron button to toggle visibility
   - Topic videos retained as identity confirmation while Official/Label prioritized for performance tracking
+- **Songstats Integration** (Dec 2025):
+  - Fetches social media metrics: TikTok plays/videos, SoundCloud plays, Instagram reach, Snapchat plays
+  - YouTube data excluded (already have our own YouTube Data API integration)
+  - 50 requests/month limit for free tier with quota tracking in social_metrics_usage table
+  - Playback Analytics page updated to combine YouTube views + Songstats social plays
+  - "Refresh Social Metrics" button with loading states and quota warning banner
+  - Platform distribution charts showing all platforms (YouTube, TikTok, SoundCloud, Instagram, Snapchat)
+  - Track-level social metrics with expandable details in Track Details tab
+  - API endpoints: GET /api/social-metrics/status, GET /api/social-metrics/summary, POST /api/social-metrics/refresh-all

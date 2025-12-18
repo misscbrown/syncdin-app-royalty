@@ -543,7 +543,7 @@ export class DatabaseStorage implements IStorage {
     if (existing) {
       const [updated] = await db.update(socialMetricsUsage)
         .set({
-          requestCount: (existing.requestCount || 0) + 1,
+          requestCount: sql`${socialMetricsUsage.requestCount} + 1`,
           lastRequestAt: new Date(),
         })
         .where(eq(socialMetricsUsage.id, existing.id))

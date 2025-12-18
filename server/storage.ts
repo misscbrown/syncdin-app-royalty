@@ -1,6 +1,7 @@
 import { 
   users, tracks, royaltyEntries, uploadedFiles, trackIntegrations,
   prsStatements, works, performanceRoyalties,
+  socialMetrics, socialMetricsUsage,
   type User, type InsertUser,
   type Track, type InsertTrack, type TrackWithStats,
   type RoyaltyEntry, type InsertRoyaltyEntry,
@@ -8,7 +9,9 @@ import {
   type TrackIntegration, type InsertTrackIntegration,
   type PrsStatement, type InsertPrsStatement,
   type Work, type InsertWork, type WorkWithStats,
-  type PerformanceRoyalty, type InsertPerformanceRoyalty
+  type PerformanceRoyalty, type InsertPerformanceRoyalty,
+  type SocialMetrics, type InsertSocialMetrics,
+  type SocialMetricsUsage, type InsertSocialMetricsUsage
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, desc, and } from "drizzle-orm";
@@ -86,6 +89,18 @@ export interface IStorage {
   getAllPerformanceRoyalties(): Promise<PerformanceRoyalty[]>;
   createPerformanceRoyalty(entry: InsertPerformanceRoyalty): Promise<PerformanceRoyalty>;
   createPerformanceRoyalties(entries: InsertPerformanceRoyalty[]): Promise<PerformanceRoyalty[]>;
+  
+  // Social Metrics (Songstats)
+  getSocialMetrics(trackId: string): Promise<SocialMetrics | undefined>;
+  getSocialMetricsByIsrc(isrc: string): Promise<SocialMetrics | undefined>;
+  getAllSocialMetrics(): Promise<SocialMetrics[]>;
+  createSocialMetrics(metrics: InsertSocialMetrics): Promise<SocialMetrics>;
+  upsertSocialMetrics(metrics: InsertSocialMetrics): Promise<SocialMetrics>;
+  
+  // Social Metrics Usage (quota tracking)
+  getCurrentMonthUsage(): Promise<SocialMetricsUsage | undefined>;
+  incrementUsage(): Promise<SocialMetricsUsage>;
+  getRemainingQuota(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -472,6 +487,84 @@ export class DatabaseStorage implements IStorage {
     if (entries.length === 0) return [];
     const result = await db.insert(performanceRoyalties).values(entries).returning();
     return result;
+  }
+
+  // Social Metrics (Songstats)
+  async getSocialMetrics(trackId: string): Promise<SocialMetrics | undefined> {
+    const [metrics] = await db.select().from(socialMetrics).where(eq(socialMetrics.trackId, trackId));
+    return metrics || undefined;
+  }
+
+  async getSocialMetricsByIsrc(isrc: string): Promise<SocialMetrics | undefined> {
+    const [metrics] = await db.select().from(socialMetrics).where(eq(socialMetrics.isrc, isrc));
+    return metrics || undefined;
+  }
+
+  async getAllSocialMetrics(): Promise<SocialMetrics[]> {
+    return await db.select().from(socialMetrics).orderBy(desc(socialMetrics.lastUpdated));
+  }
+
+  async createSocialMetrics(metrics: InsertSocialMetrics): Promise<SocialMetrics> {
+    const [result] = await db.insert(socialMetrics).values(metrics).returning();
+    return result;
+  }
+
+  async upsertSocialMetrics(metrics: InsertSocialMetrics): Promise<SocialMetrics> {
+    const existing = await this.getSocialMetricsByIsrc(metrics.isrc);
+    if (existing) {
+      const [updated] = await db.update(socialMetrics)
+        .set({
+          ...metrics,
+          lastUpdated: new Date(),
+        })
+        .where(eq(socialMetrics.id, existing.id))
+        .returning();
+      return updated;
+    }
+    return await this.createSocialMetrics(metrics);
+  }
+
+  // Social Metrics Usage (quota tracking)
+  private getCurrentMonthKey(): string {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  async getCurrentMonthUsage(): Promise<SocialMetricsUsage | undefined> {
+    const monthKey = this.getCurrentMonthKey();
+    const [usage] = await db.select().from(socialMetricsUsage).where(eq(socialMetricsUsage.monthKey, monthKey));
+    return usage || undefined;
+  }
+
+  async incrementUsage(): Promise<SocialMetricsUsage> {
+    const monthKey = this.getCurrentMonthKey();
+    const existing = await this.getCurrentMonthUsage();
+    
+    if (existing) {
+      const [updated] = await db.update(socialMetricsUsage)
+        .set({
+          requestCount: (existing.requestCount || 0) + 1,
+          lastRequestAt: new Date(),
+        })
+        .where(eq(socialMetricsUsage.id, existing.id))
+        .returning();
+      return updated;
+    }
+    
+    const [created] = await db.insert(socialMetricsUsage)
+      .values({
+        monthKey,
+        requestCount: 1,
+        lastRequestAt: new Date(),
+      })
+      .returning();
+    return created;
+  }
+
+  async getRemainingQuota(): Promise<number> {
+    const MONTHLY_LIMIT = 50;
+    const usage = await this.getCurrentMonthUsage();
+    return MONTHLY_LIMIT - (usage?.requestCount || 0);
   }
 }
 

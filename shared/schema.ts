@@ -314,3 +314,82 @@ export type WorkWithStats = Work & {
   territoriesCount: number;
   productionsCount: number;
 };
+
+// ============================================
+// Social Metrics Tables (Songstats Integration)
+// ============================================
+
+// Social Metrics - stores playback data from Songstats (TikTok, SoundCloud, Instagram, Snapchat)
+export const socialMetrics = pgTable("social_metrics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  trackId: varchar("track_id").notNull().references(() => tracks.id),
+  
+  // Track identification (for deduplication)
+  isrc: text("isrc").notNull(),
+  title: text("title").notNull(),
+  artist: text("artist").notNull(),
+  
+  // Platform-specific metrics (excluding YouTube - we have our own integration)
+  tiktokPlays: integer("tiktok_plays").default(0),
+  tiktokVideos: integer("tiktok_videos").default(0),
+  soundcloudPlays: integer("soundcloud_plays").default(0),
+  instagramReels: integer("instagram_reels").default(0),
+  snapchatPlays: integer("snapchat_plays").default(0),
+  
+  // Aggregated totals (excluding YouTube)
+  totalSocialPlays: integer("total_social_plays").default(0),
+  topPlatform: text("top_platform"), // 'tiktok', 'soundcloud', 'instagram', 'snapchat'
+  
+  // Raw API response for additional data
+  rawResponse: jsonb("raw_response"),
+  
+  lastUpdated: timestamp("last_updated").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const socialMetricsRelations = relations(socialMetrics, ({ one }) => ({
+  track: one(tracks, {
+    fields: [socialMetrics.trackId],
+    references: [tracks.id],
+  }),
+}));
+
+export const insertSocialMetricsSchema = createInsertSchema(socialMetrics).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertSocialMetrics = z.infer<typeof insertSocialMetricsSchema>;
+export type SocialMetrics = typeof socialMetrics.$inferSelect;
+
+// Social Metrics Usage - tracks monthly API quota (50 requests/month for free tier)
+export const socialMetricsUsage = pgTable("social_metrics_usage", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  monthKey: text("month_key").notNull().unique(), // Format: "2024-12"
+  requestCount: integer("request_count").default(0).notNull(),
+  lastRequestAt: timestamp("last_request_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSocialMetricsUsageSchema = createInsertSchema(socialMetricsUsage).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertSocialMetricsUsage = z.infer<typeof insertSocialMetricsUsageSchema>;
+export type SocialMetricsUsage = typeof socialMetricsUsage.$inferSelect;
+
+// Aggregated social metrics type for dashboard
+export type SocialMetricsSummary = {
+  totalSocialPlays: number;
+  topPlatform: string;
+  activeTracksCount: number;
+  platformBreakdown: {
+    tiktok: number;
+    soundcloud: number;
+    instagram: number;
+    snapchat: number;
+  };
+  remainingQuota: number;
+  limitReached: boolean;
+};

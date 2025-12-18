@@ -211,3 +211,8 @@ npm run db:push    # Push schema changes to database
   - UI badges with tooltips explaining source type and confidence levels
   - YouTube views displayed as "usage signals" (separate from financial data)
   - Modular architecture ready for additional metadata sources (Radio APIs, sync databases)
+- **Re-match functionality** (Dec 2025):
+  - Single track re-match for Spotify and YouTube (refresh button on matched tracks)
+  - Batch re-match all matched tracks with "Re-match Spotify" and "Re-match YouTube" buttons
+  - YouTube re-match updates classification data (source type, identity confidence, performance weight)
+  - Rate limiting: 200ms for Spotify, 500ms for YouTube batch operations

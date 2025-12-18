@@ -784,7 +784,7 @@ export async function registerRoutes(
     }
   });
 
-  // Match a single track with YouTube
+  // Match a single track with YouTube (stores all valid matches with isPrimary flag)
   app.post('/api/youtube/match/:trackId', async (req, res) => {
     try {
       const { trackId } = req.params;
@@ -796,12 +796,14 @@ export async function registerRoutes(
       }
       
       // Check if already matched on YouTube
-      const existingMatch = await storage.getTrackIntegration(trackId, 'youtube');
-      if (existingMatch) {
+      const existingMatches = await storage.getTrackIntegrations(trackId, 'youtube');
+      if (existingMatches.length > 0) {
+        const primaryMatch = existingMatches.find(m => m.isPrimary === 'true') || existingMatches[0];
         return res.json({ 
           success: true, 
           alreadyMatched: true,
-          integration: existingMatch 
+          integration: primaryMatch,
+          totalMatches: existingMatches.length
         });
       }
       
@@ -809,50 +811,49 @@ export async function registerRoutes(
       const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify');
       const spotifyDurationMs = spotifyMatch?.durationMs || null;
       
-      // Try to match with YouTube (ISRC → duration → channel → fuzzy)
-      const youtubeResult = await matchTrackOnYouTube(track.title, track.artist, track.isrc, spotifyDurationMs);
+      // Get multi-match results with classification (includes priority sorting)
+      const multiResult = await matchTrackOnYouTubeMulti(track.title, track.artist, track.isrc, spotifyDurationMs);
       
-      if (!youtubeResult.match) {
+      if (multiResult.matches.length === 0) {
         return res.json({ 
           success: false, 
           message: 'No match found on YouTube' 
         });
       }
       
-      // Get multi-match results with classification
-      const multiResult = await matchTrackOnYouTubeMulti(track.title, track.artist, track.isrc, spotifyDurationMs);
-      const primaryMatch = multiResult.matches[0]; // Use the best match
-      
-      // Store the integration with classification data
-      const integration: InsertTrackIntegration = {
+      // Store ALL valid matches with isPrimary flag (first one is primary)
+      const integrations: InsertTrackIntegration[] = multiResult.matches.map((match, index) => ({
         trackId,
         provider: 'youtube',
-        providerId: youtubeResult.match.videoId,
-        providerUri: youtubeResult.match.videoUrl,
-        matchedName: youtubeResult.match.title,
-        matchedArtists: [youtubeResult.match.channelTitle],
-        albumArt: youtubeResult.match.thumbnail,
-        matchConfidence: String(youtubeResult.confidence),
-        matchMethod: youtubeResult.matchMethod || undefined,
+        providerId: match.videoId,
+        providerUri: match.videoUrl || `https://www.youtube.com/watch?v=${match.videoId}`,
+        matchedName: match.title,
+        matchedArtists: [match.channelTitle],
+        albumArt: match.thumbnail,
+        matchConfidence: String(match.matchConfidence),
+        matchMethod: match.matchMethod,
         matchSource: 'youtube',
-        viewCount: youtubeResult.match.viewCount,
-        channelName: youtubeResult.match.channelTitle,
-        channelId: youtubeResult.match.channelId,
-        durationMs: youtubeResult.match.durationMs,
-        // Classification fields
-        sourceType: primaryMatch?.sourceType || 'OTHER',
-        identityConfidence: primaryMatch?.identityConfidence || 'LOW',
-        performanceWeight: primaryMatch?.performanceWeight || 'LOW',
-        videoPublishedAt: youtubeResult.match.publishedAt,
-      };
+        viewCount: match.viewCount,
+        channelName: match.channelTitle,
+        channelId: match.channelId,
+        durationMs: match.durationMs,
+        sourceType: match.sourceType,
+        identityConfidence: match.identityConfidence,
+        performanceWeight: match.performanceWeight,
+        videoPublishedAt: match.publishedAt,
+        isPrimary: index === 0 ? 'true' : 'false', // First match is primary
+      }));
       
-      const savedIntegration = await storage.createTrackIntegration(integration);
+      const savedIntegrations = await storage.createTrackIntegrations(integrations);
+      const primaryIntegration = savedIntegrations[0];
       
       res.json({ 
         success: true, 
-        integration: savedIntegration,
-        confidence: youtubeResult.confidence,
-        matchMethod: youtubeResult.matchMethod
+        integration: primaryIntegration,
+        totalMatches: savedIntegrations.length,
+        secondaryMatches: savedIntegrations.slice(1).length,
+        confidence: multiResult.matches[0].matchConfidence,
+        matchMethod: multiResult.matches[0].matchMethod
       });
     } catch (error: any) {
       console.error('YouTube match error:', error);
@@ -860,7 +861,7 @@ export async function registerRoutes(
     }
   });
 
-  // Batch match multiple tracks with YouTube
+  // Batch match multiple tracks with YouTube (stores all valid matches per track)
   app.post('/api/youtube/match-batch', async (req, res) => {
     try {
       const { trackIds } = req.body;
@@ -873,11 +874,13 @@ export async function registerRoutes(
         matched: number; 
         failed: number; 
         skipped: number;
-        details: Array<{ trackId: string; status: string; youtubeId?: string; confidence?: number; sourceType?: string; identityConfidence?: string }> 
+        totalSecondaryMatches: number;
+        details: Array<{ trackId: string; status: string; youtubeId?: string; confidence?: number; sourceType?: string; identityConfidence?: string; secondaryCount?: number }> 
       } = {
         matched: 0,
         failed: 0,
         skipped: 0,
+        totalSecondaryMatches: 0,
         details: []
       };
       
@@ -885,10 +888,11 @@ export async function registerRoutes(
       for (const trackId of trackIds) {
         try {
           // Check if already matched
-          const existingMatch = await storage.getTrackIntegration(trackId, 'youtube');
-          if (existingMatch) {
+          const existingMatches = await storage.getTrackIntegrations(trackId, 'youtube');
+          if (existingMatches.length > 0) {
             results.skipped++;
-            results.details.push({ trackId, status: 'skipped', youtubeId: existingMatch.providerId });
+            const primary = existingMatches.find(m => m.isPrimary === 'true') || existingMatches[0];
+            results.details.push({ trackId, status: 'skipped', youtubeId: primary.providerId });
             continue;
           }
           
@@ -904,50 +908,51 @@ export async function registerRoutes(
           const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify');
           const spotifyDurationMs = spotifyMatch?.durationMs || null;
           
-          // Try to match with YouTube (ISRC → duration → channel → fuzzy)
-          const youtubeResult = await matchTrackOnYouTube(track.title, track.artist, track.isrc, spotifyDurationMs);
+          // Get multi-match results with classification
+          const multiResult = await matchTrackOnYouTubeMulti(track.title, track.artist, track.isrc, spotifyDurationMs);
           
-          if (!youtubeResult.match) {
+          if (multiResult.matches.length === 0) {
             results.failed++;
             results.details.push({ trackId, status: 'no_match' });
             continue;
           }
           
-          // Get multi-match classification
-          const multiResult = await matchTrackOnYouTubeMulti(track.title, track.artist, track.isrc, spotifyDurationMs);
           const primaryMatch = multiResult.matches[0];
           
-          // Store the integration with classification
-          const integration: InsertTrackIntegration = {
+          // Store ALL valid matches with isPrimary flag
+          const integrations: InsertTrackIntegration[] = multiResult.matches.map((match, index) => ({
             trackId,
             provider: 'youtube',
-            providerId: youtubeResult.match.videoId,
-            providerUri: youtubeResult.match.videoUrl,
-            matchedName: youtubeResult.match.title,
-            matchedArtists: [youtubeResult.match.channelTitle],
-            albumArt: youtubeResult.match.thumbnail,
-            matchConfidence: String(youtubeResult.confidence),
-            matchMethod: youtubeResult.matchMethod || undefined,
+            providerId: match.videoId,
+            providerUri: match.videoUrl || `https://www.youtube.com/watch?v=${match.videoId}`,
+            matchedName: match.title,
+            matchedArtists: [match.channelTitle],
+            albumArt: match.thumbnail,
+            matchConfidence: String(match.matchConfidence),
+            matchMethod: match.matchMethod,
             matchSource: 'youtube',
-            viewCount: youtubeResult.match.viewCount,
-            channelName: youtubeResult.match.channelTitle,
-            channelId: youtubeResult.match.channelId,
-            durationMs: youtubeResult.match.durationMs,
-            sourceType: primaryMatch?.sourceType || 'OTHER',
-            identityConfidence: primaryMatch?.identityConfidence || 'LOW',
-            performanceWeight: primaryMatch?.performanceWeight || 'LOW',
-            videoPublishedAt: youtubeResult.match.publishedAt,
-          };
+            viewCount: match.viewCount,
+            channelName: match.channelTitle,
+            channelId: match.channelId,
+            durationMs: match.durationMs,
+            sourceType: match.sourceType,
+            identityConfidence: match.identityConfidence,
+            performanceWeight: match.performanceWeight,
+            videoPublishedAt: match.publishedAt,
+            isPrimary: index === 0 ? 'true' : 'false',
+          }));
           
-          await storage.createTrackIntegration(integration);
+          await storage.createTrackIntegrations(integrations);
           results.matched++;
+          results.totalSecondaryMatches += integrations.length - 1;
           results.details.push({ 
             trackId, 
             status: 'matched', 
-            youtubeId: youtubeResult.match.videoId,
-            confidence: youtubeResult.confidence,
-            sourceType: primaryMatch?.sourceType,
-            identityConfidence: primaryMatch?.identityConfidence,
+            youtubeId: primaryMatch.videoId,
+            confidence: primaryMatch.matchConfidence,
+            sourceType: primaryMatch.sourceType,
+            identityConfidence: primaryMatch.identityConfidence,
+            secondaryCount: integrations.length - 1,
           });
           
           // Rate limiting: wait 500ms between API calls (YouTube quota is expensive)
@@ -1078,21 +1083,21 @@ export async function registerRoutes(
     }
   });
 
-  // Delete a YouTube match (for re-matching)
+  // Delete all YouTube matches for a track (for re-matching)
   app.delete('/api/tracks/:id/youtube', async (req, res) => {
     try {
-      const integration = await storage.getTrackIntegration(req.params.id, 'youtube');
-      if (!integration) {
-        return res.status(404).json({ error: 'No YouTube match found' });
+      const integrations = await storage.getTrackIntegrations(req.params.id, 'youtube');
+      if (integrations.length === 0) {
+        return res.status(404).json({ error: 'No YouTube matches found' });
       }
-      await storage.deleteTrackIntegration(integration.id);
-      res.json({ success: true });
+      await storage.deleteTrackIntegrationsByProvider(req.params.id, 'youtube');
+      res.json({ success: true, deleted: integrations.length });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Re-match a track with YouTube (delete existing + match again with classification)
+  // Re-match a track with YouTube (delete all existing + store all new matches with classification)
   app.post('/api/youtube/rematch/:trackId', async (req, res) => {
     try {
       const { trackId } = req.params;
@@ -1102,17 +1107,14 @@ export async function registerRoutes(
         return res.status(404).json({ error: 'Track not found' });
       }
       
-      // Delete existing match if present
-      const existingMatch = await storage.getTrackIntegration(trackId, 'youtube');
-      if (existingMatch) {
-        await storage.deleteTrackIntegration(existingMatch.id);
-      }
+      // Delete ALL existing YouTube matches for this track
+      await storage.deleteTrackIntegrationsByProvider(trackId, 'youtube');
       
       // Get Spotify match for duration cross-reference
       const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify');
       const spotifyDurationMs = spotifyMatch?.durationMs || null;
       
-      // Try to match with YouTube using multi-match (includes classification)
+      // Try to match with YouTube using multi-match (includes classification + priority sorting)
       const multiResult = await matchTrackOnYouTubeMulti(track.title, track.artist, track.isrc, spotifyDurationMs);
       
       if (multiResult.matches.length === 0) {
@@ -1122,32 +1124,31 @@ export async function registerRoutes(
         });
       }
       
-      // Use the best match (first one)
-      const primaryMatch = multiResult.matches[0];
-      
-      // Store the new integration with classification data
-      const integration: InsertTrackIntegration = {
+      // Store ALL valid matches with isPrimary flag
+      const integrations: InsertTrackIntegration[] = multiResult.matches.map((match, index) => ({
         trackId,
         provider: 'youtube',
-        providerId: primaryMatch.videoId,
-        providerUri: primaryMatch.videoUrl || `https://www.youtube.com/watch?v=${primaryMatch.videoId}`,
-        matchedName: primaryMatch.title,
-        matchedArtists: [primaryMatch.channelTitle],
-        albumArt: primaryMatch.thumbnail,
-        matchConfidence: String(primaryMatch.matchConfidence),
-        matchMethod: primaryMatch.matchMethod,
+        providerId: match.videoId,
+        providerUri: match.videoUrl || `https://www.youtube.com/watch?v=${match.videoId}`,
+        matchedName: match.title,
+        matchedArtists: [match.channelTitle],
+        albumArt: match.thumbnail,
+        matchConfidence: String(match.matchConfidence),
+        matchMethod: match.matchMethod,
         matchSource: 'youtube',
-        viewCount: primaryMatch.viewCount,
-        channelName: primaryMatch.channelTitle,
-        channelId: primaryMatch.channelId,
-        durationMs: primaryMatch.durationMs,
-        sourceType: primaryMatch.sourceType || 'OTHER',
-        identityConfidence: primaryMatch.identityConfidence || 'LOW',
-        performanceWeight: primaryMatch.performanceWeight || 'LOW',
-        videoPublishedAt: primaryMatch.publishedAt,
-      };
+        viewCount: match.viewCount,
+        channelName: match.channelTitle,
+        channelId: match.channelId,
+        durationMs: match.durationMs,
+        sourceType: match.sourceType,
+        identityConfidence: match.identityConfidence,
+        performanceWeight: match.performanceWeight,
+        videoPublishedAt: match.publishedAt,
+        isPrimary: index === 0 ? 'true' : 'false',
+      }));
       
-      const saved = await storage.createTrackIntegration(integration);
+      const savedIntegrations = await storage.createTrackIntegrations(integrations);
+      const primaryMatch = multiResult.matches[0];
       
       res.json({ 
         success: true, 
@@ -1156,7 +1157,9 @@ export async function registerRoutes(
         sourceType: primaryMatch.sourceType,
         identityConfidence: primaryMatch.identityConfidence,
         performanceWeight: primaryMatch.performanceWeight,
-        integration: saved 
+        totalMatches: savedIntegrations.length,
+        secondaryMatches: savedIntegrations.length - 1,
+        integration: savedIntegrations[0]
       });
     } catch (error: any) {
       console.error('YouTube rematch error:', error);
@@ -1164,7 +1167,7 @@ export async function registerRoutes(
     }
   });
 
-  // Batch re-match multiple tracks with YouTube (with classification)
+  // Batch re-match multiple tracks with YouTube (stores all matches with classification)
   app.post('/api/youtube/rematch-batch', async (req, res) => {
     try {
       const { trackIds } = req.body;
@@ -1173,7 +1176,12 @@ export async function registerRoutes(
         return res.status(400).json({ error: 'trackIds array is required' });
       }
       
-      const results = { matched: 0, failed: 0, details: [] as Array<{ trackId: string; status: string; youtubeId?: string; sourceType?: string }> };
+      const results = { 
+        matched: 0, 
+        failed: 0, 
+        totalSecondaryMatches: 0,
+        details: [] as Array<{ trackId: string; status: string; youtubeId?: string; sourceType?: string; secondaryCount?: number }> 
+      };
       
       for (const trackId of trackIds) {
         try {
@@ -1184,17 +1192,14 @@ export async function registerRoutes(
             continue;
           }
           
-          // Delete existing match if present
-          const existingMatch = await storage.getTrackIntegration(trackId, 'youtube');
-          if (existingMatch) {
-            await storage.deleteTrackIntegration(existingMatch.id);
-          }
+          // Delete ALL existing YouTube matches for this track
+          await storage.deleteTrackIntegrationsByProvider(trackId, 'youtube');
           
           // Get Spotify duration for cross-reference
           const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify');
           const spotifyDurationMs = spotifyMatch?.durationMs || null;
           
-          // Try to match with multi-match
+          // Get all matches with multi-match (includes priority sorting)
           const multiResult = await matchTrackOnYouTubeMulti(track.title, track.artist, track.isrc, spotifyDurationMs);
           
           if (multiResult.matches.length === 0) {
@@ -1205,30 +1210,39 @@ export async function registerRoutes(
           
           const primaryMatch = multiResult.matches[0];
           
-          const integration: InsertTrackIntegration = {
+          // Store ALL valid matches with isPrimary flag
+          const integrations: InsertTrackIntegration[] = multiResult.matches.map((match, index) => ({
             trackId,
             provider: 'youtube',
-            providerId: primaryMatch.videoId,
-            providerUri: primaryMatch.videoUrl || `https://www.youtube.com/watch?v=${primaryMatch.videoId}`,
-            matchedName: primaryMatch.title,
-            matchedArtists: [primaryMatch.channelTitle],
-            albumArt: primaryMatch.thumbnail,
-            matchConfidence: String(primaryMatch.matchConfidence),
-            matchMethod: primaryMatch.matchMethod,
+            providerId: match.videoId,
+            providerUri: match.videoUrl || `https://www.youtube.com/watch?v=${match.videoId}`,
+            matchedName: match.title,
+            matchedArtists: [match.channelTitle],
+            albumArt: match.thumbnail,
+            matchConfidence: String(match.matchConfidence),
+            matchMethod: match.matchMethod,
             matchSource: 'youtube',
-            viewCount: primaryMatch.viewCount,
-            channelName: primaryMatch.channelTitle,
-            channelId: primaryMatch.channelId,
-            durationMs: primaryMatch.durationMs,
-            sourceType: primaryMatch.sourceType || 'OTHER',
-            identityConfidence: primaryMatch.identityConfidence || 'LOW',
-            performanceWeight: primaryMatch.performanceWeight || 'LOW',
-            videoPublishedAt: primaryMatch.publishedAt,
-          };
+            viewCount: match.viewCount,
+            channelName: match.channelTitle,
+            channelId: match.channelId,
+            durationMs: match.durationMs,
+            sourceType: match.sourceType,
+            identityConfidence: match.identityConfidence,
+            performanceWeight: match.performanceWeight,
+            videoPublishedAt: match.publishedAt,
+            isPrimary: index === 0 ? 'true' : 'false',
+          }));
           
-          await storage.createTrackIntegration(integration);
+          await storage.createTrackIntegrations(integrations);
           results.matched++;
-          results.details.push({ trackId, status: 'matched', youtubeId: primaryMatch.videoId, sourceType: primaryMatch.sourceType });
+          results.totalSecondaryMatches += integrations.length - 1;
+          results.details.push({ 
+            trackId, 
+            status: 'matched', 
+            youtubeId: primaryMatch.videoId, 
+            sourceType: primaryMatch.sourceType,
+            secondaryCount: integrations.length - 1,
+          });
           
           // Rate limiting - 500ms delay to respect YouTube API quotas
           await new Promise(resolve => setTimeout(resolve, 500));

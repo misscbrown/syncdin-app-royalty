@@ -1,0 +1,107 @@
+Update the existing YouTube integration so that matched videos are classified, scored, and displayed in a way that supports metadata confidence and performance insight — without attempting to calculate royalties.
+
+Instructions
+
+Do not force a single YouTube match per track
+
+A track may have multiple valid YouTube matches.
+
+Store and display more than one match where applicable.
+
+Classify every YouTube match by source type
+Add a sourceType field with one of:
+
+OFFICIAL_ARTIST_CHANNEL
+
+LABEL_CHANNEL
+
+TOPIC_VIDEO
+
+OTHER
+
+Classification rules:
+
+Use channel metadata and naming conventions to infer type.
+
+YouTube “Topic” videos must be explicitly tagged as TOPIC_VIDEO.
+
+Separate identity confidence from performance value
+For each match, calculate two independent scores:
+
+Identity Confidence
+
+HIGH → Topic videos, label uploads, ISRC matches (where available)
+
+MEDIUM → Title + artist matches on official channels
+
+LOW → Loose title-only matches
+
+Performance Weight
+
+HIGH → Official artist channel videos
+
+MEDIUM → Label channel uploads
+
+LOW → Topic videos
+
+These scores must not be merged into a single number.
+
+Do not calculate royalties or implied earnings
+
+YouTube view counts are informational only.
+
+Views should never be converted into money or “estimated revenue”.
+
+Label this data clearly as usage signals, not payout data.
+
+Dashboard behaviour
+
+Use YouTube data to:
+
+Support playback analytics
+
+Highlight activity vs. reported income
+
+Flag tracks with high performance but low distributor reporting
+
+Do not use YouTube data in financial totals.
+
+UI expectations (lightweight)
+
+Show badges such as:
+
+“Official Video”
+
+“Topic Video”
+
+“Label Upload”
+
+Tooltips should explain:
+
+Identity confidence
+
+Performance relevance
+
+Avoid exposing raw scoring logic to users.
+
+Architecture requirement
+
+Implement this logic in a way that can later support:
+
+Radio APIs
+
+Sync databases
+
+Other DSP metadata sources
+
+Keep YouTube matching modular and non-hardcoded.
+
+Success Criteria
+
+Tracks can have multiple YouTube matches
+
+Each match clearly states what it is and why it matters
+
+No revenue assumptions are made
+
+The system becomes more trustworthy, not more speculative

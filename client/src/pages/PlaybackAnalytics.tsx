@@ -81,6 +81,13 @@ interface SocialMetricsResponse {
   limitReached: boolean;
 }
 
+interface Track {
+  id: string;
+  isrc: string;
+  title: string;
+  artist: string;
+}
+
 const PLATFORM_COLORS: Record<string, string> = {
   youtube: "hsl(0, 70%, 50%)",
   tiktok: "hsl(330, 80%, 55%)",
@@ -118,6 +125,14 @@ export default function PlaybackAnalytics() {
     queryKey: ["/api/social-metrics"],
   });
 
+  const { data: tracksResponse, isLoading: tracksLoading } = useQuery<{ tracks: Track[] }>({
+    queryKey: ["/api/tracks"],
+    enabled: activeTab === "tracks",
+  });
+  const allTracks = tracksResponse?.tracks;
+
+  const [refreshingTrackId, setRefreshingTrackId] = useState<string | null>(null);
+
   const refreshMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", "/api/social-metrics/refresh-all");
@@ -141,7 +156,34 @@ export default function PlaybackAnalytics() {
     },
   });
 
+  const refreshSingleTrackMutation = useMutation({
+    mutationFn: async (trackId: string) => {
+      setRefreshingTrackId(trackId);
+      const response = await apiRequest("POST", `/api/social-metrics/refresh/${trackId}`);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setRefreshingTrackId(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/social-metrics"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/social-metrics/summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/social-metrics/status"] });
+      toast({
+        title: "Track Metrics Refreshed",
+        description: `${data.remaining} API calls remaining this month.`,
+      });
+    },
+    onError: (error: Error) => {
+      setRefreshingTrackId(null);
+      toast({
+        title: "Refresh Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const isLoading = statusLoading || summaryLoading || dashboardLoading || metricsLoading;
+  const isTracksLoading = tracksLoading && activeTab === "tracks";
 
   const youtubeViews = dashboardData?.summary?.totalYouTubeViews || 0;
   const socialPlays = socialSummary?.totalSocialPlays || 0;
@@ -422,7 +464,29 @@ export default function PlaybackAnalytics() {
                                 {metric.topPlatform || "N/A"}
                               </p>
                             </div>
-                            <button className="flex-shrink-0">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                refreshSingleTrackMutation.mutate(metric.trackId);
+                              }}
+                              disabled={refreshingTrackId === metric.trackId || songstatsStatus?.limitReached}
+                              data-testid={`button-refresh-track-${metric.id}`}
+                            >
+                              {refreshingTrackId === metric.trackId ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="w-4 h-4" />
+                              )}
+                            </Button>
+                            <button 
+                              className="flex-shrink-0" 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleTrack(metric.id);
+                              }}
+                            >
                               {expandedTrack === metric.id ? (
                                 <ChevronUp className="w-5 h-5 text-muted-foreground" />
                               ) : (
@@ -476,24 +540,59 @@ export default function PlaybackAnalytics() {
                   </div>
                 ))}
               </div>
+            ) : isTracksLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : allTracks && allTracks.length > 0 ? (
+              <div className="space-y-3">
+                <div className="bg-muted/30 border border-border rounded-lg p-4 mb-4">
+                  <p className="text-sm text-muted-foreground">
+                    No social metrics fetched yet. Click the refresh icon next to any track to test with just 1 API call.
+                  </p>
+                </div>
+                {allTracks.slice(0, 10).map((track) => (
+                  <Card
+                    key={track.id}
+                    className="bg-card border-border"
+                    data-testid={`card-track-test-${track.id}`}
+                  >
+                    <CardContent className="py-4">
+                      <div className="flex items-center justify-between gap-4 flex-wrap">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-foreground truncate">{track.title}</h3>
+                          <p className="text-sm text-muted-foreground truncate">{track.artist}</p>
+                          <p className="text-xs text-muted-foreground mt-1">ISRC: {track.isrc}</p>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => refreshSingleTrackMutation.mutate(track.id)}
+                          disabled={refreshingTrackId === track.id || songstatsStatus?.limitReached}
+                          data-testid={`button-refresh-test-track-${track.id}`}
+                        >
+                          {refreshingTrackId === track.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                {allTracks.length > 10 && (
+                  <p className="text-sm text-muted-foreground text-center py-2">
+                    Showing first 10 tracks. Refresh all to fetch metrics for all {allTracks.length} tracks.
+                  </p>
+                )}
+              </div>
             ) : (
               <Card className="bg-card border-border">
                 <CardContent className="py-12 text-center">
                   <p className="text-muted-foreground mb-4">
-                    No social metrics data yet. Click "Refresh Social Metrics" to fetch data from Songstats.
+                    No tracks in your library yet. Upload tracks first.
                   </p>
-                  <Button
-                    onClick={() => refreshMutation.mutate()}
-                    disabled={refreshMutation.isPending || songstatsStatus?.limitReached}
-                    data-testid="button-refresh-social-metrics-empty"
-                  >
-                    {refreshMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                    )}
-                    Fetch Social Metrics
-                  </Button>
                 </CardContent>
               </Card>
             )}

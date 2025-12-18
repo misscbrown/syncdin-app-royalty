@@ -169,6 +169,9 @@ export const trackIntegrations = pgTable("track_integrations", {
   performanceWeight: text("performance_weight"), // 'HIGH', 'MEDIUM', 'LOW'
   videoPublishedAt: text("video_published_at"),
   
+  // Multi-match support: indicates which match is the primary/selected one for this track+provider
+  isPrimary: text("is_primary").default("true"), // 'true' or 'false' - primary match for UI display
+  
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

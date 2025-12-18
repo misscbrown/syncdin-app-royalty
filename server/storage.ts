@@ -47,8 +47,10 @@ export interface IStorage {
   getTrackIntegrationsByTrack(trackId: string): Promise<TrackIntegration[]>;
   getAllTrackIntegrations(provider?: string): Promise<TrackIntegration[]>;
   createTrackIntegration(integration: InsertTrackIntegration): Promise<TrackIntegration>;
+  createTrackIntegrations(integrations: InsertTrackIntegration[]): Promise<TrackIntegration[]>;
   updateTrackIntegration(id: string, updates: Partial<InsertTrackIntegration>): Promise<TrackIntegration | undefined>;
   deleteTrackIntegration(id: string): Promise<void>;
+  deleteTrackIntegrationsByProvider(trackId: string, provider: string): Promise<void>;
   getTracksWithSpotifyStatus(): Promise<Array<Track & { spotifyMatched: boolean; spotifyId?: string; albumArt?: string }>>;
   getTracksWithIntegrationStatus(): Promise<Array<Track & { 
     spotifyMatched: boolean; 
@@ -216,19 +218,28 @@ export class DatabaseStorage implements IStorage {
 
   // Track Integrations
   async getTrackIntegration(trackId: string, provider: string): Promise<TrackIntegration | undefined> {
+    // Returns the PRIMARY integration for a track/provider combo
     const [integration] = await db
       .select()
       .from(trackIntegrations)
-      .where(and(eq(trackIntegrations.trackId, trackId), eq(trackIntegrations.provider, provider)));
+      .where(and(
+        eq(trackIntegrations.trackId, trackId), 
+        eq(trackIntegrations.provider, provider),
+        eq(trackIntegrations.isPrimary, 'true')
+      ));
     return integration || undefined;
   }
 
   async getTrackIntegrations(trackId: string, provider?: string): Promise<TrackIntegration[]> {
+    // Returns ALL integrations (primary and secondary) for a track
     if (provider) {
       return await db.select().from(trackIntegrations)
-        .where(and(eq(trackIntegrations.trackId, trackId), eq(trackIntegrations.provider, provider)));
+        .where(and(eq(trackIntegrations.trackId, trackId), eq(trackIntegrations.provider, provider)))
+        .orderBy(desc(trackIntegrations.isPrimary));
     }
-    return await db.select().from(trackIntegrations).where(eq(trackIntegrations.trackId, trackId));
+    return await db.select().from(trackIntegrations)
+      .where(eq(trackIntegrations.trackId, trackId))
+      .orderBy(desc(trackIntegrations.isPrimary));
   }
 
   async getTrackIntegrationsByTrack(trackId: string): Promise<TrackIntegration[]> {
@@ -247,6 +258,12 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async createTrackIntegrations(integrations: InsertTrackIntegration[]): Promise<TrackIntegration[]> {
+    if (integrations.length === 0) return [];
+    const result = await db.insert(trackIntegrations).values(integrations).returning();
+    return result;
+  }
+
   async updateTrackIntegration(id: string, updates: Partial<InsertTrackIntegration>): Promise<TrackIntegration | undefined> {
     const [updated] = await db
       .update(trackIntegrations)
@@ -258,6 +275,12 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTrackIntegration(id: string): Promise<void> {
     await db.delete(trackIntegrations).where(eq(trackIntegrations.id, id));
+  }
+
+  async deleteTrackIntegrationsByProvider(trackId: string, provider: string): Promise<void> {
+    await db.delete(trackIntegrations).where(
+      and(eq(trackIntegrations.trackId, trackId), eq(trackIntegrations.provider, provider))
+    );
   }
 
   async getTracksWithSpotifyStatus(): Promise<Array<Track & { spotifyMatched: boolean; spotifyId?: string; albumArt?: string }>> {
@@ -316,8 +339,8 @@ export class DatabaseStorage implements IStorage {
           ELSE 'none'
         END as "matchSource"
       FROM tracks t
-      LEFT JOIN track_integrations sp ON t.id = sp.track_id AND sp.provider = 'spotify'
-      LEFT JOIN track_integrations yt ON t.id = yt.track_id AND yt.provider = 'youtube'
+      LEFT JOIN track_integrations sp ON t.id = sp.track_id AND sp.provider = 'spotify' AND (sp.is_primary = 'true' OR sp.is_primary IS NULL)
+      LEFT JOIN track_integrations yt ON t.id = yt.track_id AND yt.provider = 'youtube' AND (yt.is_primary = 'true' OR yt.is_primary IS NULL)
       ORDER BY t.created_at DESC
     `);
     return result.rows as Array<Track & { 

@@ -10,6 +10,7 @@ import type {
 } from "@shared/schema";
 import { matchTrack, checkSpotifyConnection, type SpotifyTrackMatch } from "./spotify";
 import { matchTrackOnYouTube, matchTrackOnYouTubeMulti, checkYouTubeConnection, ClassifiedYouTubeMatch } from "./youtube";
+import { songstatsService } from "./services/songstatsService";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -1656,6 +1657,181 @@ export async function registerRoutes(
       });
     } catch (error: any) {
       console.error('Dashboard error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ==============================================
+  // Social Metrics Routes (Songstats Integration)
+  // ==============================================
+
+  // Check Songstats API status and quota
+  app.get("/api/social-metrics/status", async (req, res) => {
+    try {
+      const isConfigured = songstatsService.isConfigured();
+      const quota = await songstatsService.checkQuota();
+      res.json({
+        configured: isConfigured,
+        remaining: quota.remaining,
+        limitReached: quota.limitReached,
+        monthlyLimit: 50,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get aggregated social metrics summary
+  app.get("/api/social-metrics/summary", async (req, res) => {
+    try {
+      const summary = await songstatsService.getSummary();
+      res.json(summary);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get all social metrics
+  app.get("/api/social-metrics", async (req, res) => {
+    try {
+      const metrics = await storage.getAllSocialMetrics();
+      const quota = await songstatsService.checkQuota();
+      res.json({
+        metrics,
+        remainingQuota: quota.remaining,
+        limitReached: quota.limitReached,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get social metrics for a specific track
+  app.get("/api/social-metrics/:trackId", async (req, res) => {
+    try {
+      const { trackId } = req.params;
+      const metrics = await storage.getSocialMetrics(trackId);
+      if (!metrics) {
+        return res.status(404).json({ error: "No social metrics found for this track" });
+      }
+      res.json(metrics);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Refresh social metrics for a single track
+  app.post("/api/social-metrics/refresh/:trackId", async (req, res) => {
+    try {
+      const { trackId } = req.params;
+      
+      if (!songstatsService.isConfigured()) {
+        return res.status(503).json({ error: "Songstats API not configured" });
+      }
+
+      const quota = await songstatsService.checkQuota();
+      if (quota.limitReached) {
+        return res.status(429).json({ 
+          error: "Monthly API quota reached (50 requests/month)",
+          remaining: 0,
+          limitReached: true,
+        });
+      }
+
+      const result = await songstatsService.refreshTrackMetrics(trackId);
+      if (!result) {
+        return res.status(404).json({ error: "Track not found or API error" });
+      }
+
+      const newQuota = await songstatsService.checkQuota();
+      res.json({
+        success: true,
+        metrics: result,
+        remaining: newQuota.remaining,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Batch refresh social metrics for multiple tracks
+  app.post("/api/social-metrics/refresh-batch", async (req, res) => {
+    try {
+      const { trackIds } = req.body;
+      
+      if (!Array.isArray(trackIds) || trackIds.length === 0) {
+        return res.status(400).json({ error: "trackIds array is required" });
+      }
+
+      if (!songstatsService.isConfigured()) {
+        return res.status(503).json({ error: "Songstats API not configured" });
+      }
+
+      const quota = await songstatsService.checkQuota();
+      if (quota.limitReached) {
+        return res.status(429).json({ 
+          error: "Monthly API quota reached (50 requests/month)",
+          remaining: 0,
+          limitReached: true,
+        });
+      }
+
+      const result = await songstatsService.refreshBatchMetrics(trackIds);
+      res.json({
+        success: true,
+        processed: result.processed,
+        failed: result.failed,
+        quotaReached: result.quotaReached,
+        remaining: result.remaining,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Refresh all tracks that don't have social metrics yet
+  app.post("/api/social-metrics/refresh-all", async (req, res) => {
+    try {
+      if (!songstatsService.isConfigured()) {
+        return res.status(503).json({ error: "Songstats API not configured" });
+      }
+
+      const quota = await songstatsService.checkQuota();
+      if (quota.limitReached) {
+        return res.status(429).json({ 
+          error: "Monthly API quota reached (50 requests/month)",
+          remaining: 0,
+          limitReached: true,
+        });
+      }
+
+      const allTracks = await storage.getAllTracks();
+      const existingMetrics = await storage.getAllSocialMetrics();
+      const existingTrackIds = new Set(existingMetrics.map(m => m.trackId));
+      
+      const tracksWithoutMetrics = allTracks.filter(t => !existingTrackIds.has(t.id));
+      const trackIds = tracksWithoutMetrics.slice(0, Math.min(quota.remaining, 50)).map(t => t.id);
+
+      if (trackIds.length === 0) {
+        return res.json({
+          success: true,
+          message: "All tracks already have social metrics",
+          processed: 0,
+          failed: 0,
+          remaining: quota.remaining,
+        });
+      }
+
+      const result = await songstatsService.refreshBatchMetrics(trackIds);
+      res.json({
+        success: true,
+        processed: result.processed,
+        failed: result.failed,
+        quotaReached: result.quotaReached,
+        remaining: result.remaining,
+        totalWithoutMetrics: tracksWithoutMetrics.length,
+      });
+    } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });

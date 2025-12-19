@@ -231,3 +231,19 @@ npm run db:push    # Push schema changes to database
   - Platform distribution charts showing all platforms (YouTube, TikTok, SoundCloud, Instagram, Snapchat)
   - Track-level social metrics with expandable details in Track Details tab
   - API endpoints: GET /api/social-metrics/status, GET /api/social-metrics/summary, POST /api/social-metrics/refresh-all
+
+## Backlog (Future Improvements)
+
+### High Priority
+1. **Comprehensive Error Handling**
+   - Frontend: Add `isError` handling for all queries/mutations with toast notifications
+   - Backend: Return structured error codes (quota exhausted, track not found, upstream API failure)
+   - CSV upload: Differentiate parsing vs validation errors with specific 4xx responses
+   - External APIs: Surface rate limits and timeouts to users with actionable messages
+
+### Medium Priority
+- Database retry/timeout strategy for connection failures
+- Integration tests to guard against API response shape mismatches
+
+### Ideas / Nice-to-Have
+- (Add future ideas here)

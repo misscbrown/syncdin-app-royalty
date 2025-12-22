@@ -1,8 +1,23 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, timestamp, date, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, text, varchar, integer, decimal, timestamp, date, jsonb } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// MLC (Mechanical Licensing Collective) enums
+export const mlcStatusEnum = pgEnum("mlc_status_enum", [
+  "unchecked",
+  "registered", 
+  "unregistered",
+  "unknown",
+  "error"
+]);
+
+export const mlcMatchConfidenceEnum = pgEnum("mlc_match_confidence_enum", [
+  "low",
+  "medium",
+  "high"
+]);
 
 // Users table (existing)
 export const users = pgTable("users", {
@@ -27,6 +42,13 @@ export const tracks = pgTable("tracks", {
   artist: text("artist").notNull(),
   upc: text("upc"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  
+  // MLC (Mechanical Licensing Collective) verification fields
+  mlcStatus: mlcStatusEnum("mlc_status").default("unchecked").notNull(),
+  mlcWorkId: text("mlc_work_id"), // MLC's work identifier
+  mlcMatchConfidence: mlcMatchConfidenceEnum("mlc_match_confidence"),
+  mlcLastCheckedAt: timestamp("mlc_last_checked_at"),
+  mlcNotes: text("mlc_notes"), // Manual notes/annotations
 });
 
 export const tracksRelations = relations(tracks, ({ many }) => ({

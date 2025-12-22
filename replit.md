@@ -39,6 +39,12 @@ A full-stack music royalty tracking application with React + Vite + TailwindCSS 
 ### Tables
 - **tracks** - Unique tracks identified by ISRC
   - id, isrc (unique), title, artist, upc, createdAt
+  - MLC verification fields:
+    - mlcStatus (unchecked/registered/unregistered/unknown/error, default: unchecked)
+    - mlcWorkId (nullable) - MLC's work identifier
+    - mlcMatchConfidence (low/medium/high, nullable)
+    - mlcLastCheckedAt (timestamp, nullable)
+    - mlcNotes (text, nullable) - manual annotations
   
 - **royalty_entries** - Individual CSV line items linked to tracks
   - id, trackId, uploadedFileId, dateInserted, reportingDate, saleMonth
@@ -231,6 +237,11 @@ npm run db:push    # Push schema changes to database
   - Platform distribution charts showing all platforms (YouTube, TikTok, SoundCloud, Instagram, Snapchat)
   - Track-level social metrics with expandable details in Track Details tab
   - API endpoints: GET /api/social-metrics/status, GET /api/social-metrics/summary, POST /api/social-metrics/refresh-all
+- **MLC Data Model** (Dec 2025):
+  - Added MLC verification fields to tracks table (data model only, no API calls yet)
+  - mlcStatus: unchecked/registered/unregistered/unknown/error (default: unchecked)
+  - mlcWorkId, mlcMatchConfidence, mlcLastCheckedAt, mlcNotes
+  - Future-proof design for manual checks and eventual API integration
 
 ## Backlog (Future Improvements)
 

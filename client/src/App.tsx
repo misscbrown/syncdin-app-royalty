@@ -14,6 +14,7 @@ import MetadataMatching from "@/pages/MetadataMatching";
 import PlaybackAnalytics from "./pages/PlaybackAnalytics";
 import ReportsExports from "./pages/ReportsExports";
 import Settings from "./pages/Settings";
+import MLCVerification from "@/pages/MLCVerification";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/metadata-matching" component={MetadataMatching} />
       <Route path="/playback-analytics" component={PlaybackAnalytics} />
       <Route path="/reports-exports" component={ReportsExports} />
+      <Route path="/mlc-verification" component={MLCVerification} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

@@ -29,6 +29,7 @@ export interface IStorage {
   getTracksWithStats(): Promise<TrackWithStats[]>;
   createTrack(track: InsertTrack): Promise<Track>;
   upsertTrack(track: InsertTrack): Promise<Track>;
+  updateTrackMlcStatus(id: string, mlcStatus: string, mlcNotes?: string): Promise<Track | undefined>;
   
   // Royalty Entries
   getRoyaltyEntry(id: string): Promise<RoyaltyEntry | undefined>;
@@ -167,6 +168,21 @@ export class DatabaseStorage implements IStorage {
       return existing;
     }
     return await this.createTrack(insertTrack);
+  }
+
+  async updateTrackMlcStatus(id: string, mlcStatus: string, mlcNotes?: string): Promise<Track | undefined> {
+    const updateData: Partial<Track> = {
+      mlcStatus: mlcStatus as any,
+      mlcLastCheckedAt: new Date(),
+    };
+    if (mlcNotes !== undefined) {
+      updateData.mlcNotes = mlcNotes;
+    }
+    const [updated] = await db.update(tracks)
+      .set(updateData)
+      .where(eq(tracks.id, id))
+      .returning();
+    return updated || undefined;
   }
 
   // Royalty Entries

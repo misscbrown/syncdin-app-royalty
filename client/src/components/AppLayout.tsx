@@ -8,7 +8,8 @@ import {
   FileDown, 
   Settings,
   Music,
-  Library
+  Library,
+  FileCheck
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -22,6 +23,7 @@ const sidebarItems = [
   { path: "/metadata-matching", label: "Metadata & Matching", icon: GitCompare },
   { path: "/royalty-statements", label: "Royalties & Earnings", icon: FileText },
   { path: "/playback-analytics", label: "Playback Analytics", icon: BarChart3 },
+  { path: "/mlc-verification", label: "MLC Verification", icon: FileCheck },
   { path: "/reports-exports", label: "Reports & Exports", icon: FileDown },
   { path: "/settings", label: "Settings", icon: Settings },
 ];

@@ -416,6 +416,29 @@ export async function registerRoutes(
     }
   });
 
+  // Update MLC status for a track (manual check)
+  app.patch('/api/tracks/:id/mlc-status', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { mlcStatus, mlcNotes } = req.body;
+      
+      const track = await storage.getTrack(id);
+      if (!track) {
+        return res.status(404).json({ error: 'Track not found' });
+      }
+      
+      const validStatuses = ['unchecked', 'registered', 'unregistered', 'unknown', 'error'];
+      if (mlcStatus && !validStatuses.includes(mlcStatus)) {
+        return res.status(400).json({ error: 'Invalid MLC status' });
+      }
+      
+      const updated = await storage.updateTrackMlcStatus(id, mlcStatus || 'unknown', mlcNotes);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Get all royalty entries
   app.get('/api/royalties', async (req, res) => {
     try {

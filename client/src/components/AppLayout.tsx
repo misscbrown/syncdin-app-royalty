@@ -74,32 +74,37 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
         <div className="p-4 border-t border-border space-y-3">
           {user && (
-            <div className="flex items-center gap-2">
-              {(user as any).profileImageUrl ? (
+            <Link
+              href="/profile"
+              className="flex items-center gap-2 p-2 -m-2 rounded-md hover-elevate cursor-pointer"
+              data-testid="link-profile"
+            >
+              {user.profileImageUrl ? (
                 <img 
-                  src={(user as any).profileImageUrl} 
+                  src={user.profileImageUrl} 
                   alt="Profile" 
                   className="w-8 h-8 rounded-full object-cover"
                 />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
                   <span className="text-sm font-medium text-primary">
-                    {((user as any).firstName || user.email || 'U').charAt(0).toUpperCase()}
+                    {(user.firstName || user.email || 'U').charAt(0).toUpperCase()}
                   </span>
                 </div>
               )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate" data-testid="text-user-email">
-                  {(user as any).firstName ? `${(user as any).firstName} ${(user as any).lastName || ''}`.trim() : user.email || 'User'}
+                  {user.fullName || (user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user.email || 'User')}
                 </p>
+                <p className="text-xs text-muted-foreground">View profile</p>
               </div>
-            </div>
+            </Link>
           )}
           <Button
             variant="ghost"
             size="sm"
             className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
-            onClick={logout}
+            onClick={() => logout()}
             data-testid="button-logout"
           >
             <LogOut className="w-4 h-4" />

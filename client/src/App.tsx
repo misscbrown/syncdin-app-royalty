@@ -15,6 +15,7 @@ import ReportsExports from "./pages/ReportsExports";
 import Settings from "./pages/Settings";
 import MLCVerification from "@/pages/MLCVerification";
 import Onboarding from "@/pages/Onboarding";
+import Profile from "@/pages/Profile";
 import NotFound from "@/pages/not-found";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -171,6 +172,11 @@ function Router() {
       <Route path="/settings">
         <ProtectedRoute>
           <Settings />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/profile">
+        <ProtectedRoute>
+          <Profile />
         </ProtectedRoute>
       </Route>
       <Route component={NotFound} />

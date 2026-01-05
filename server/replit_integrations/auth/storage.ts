@@ -12,12 +12,20 @@ export interface OnboardingData {
   acceptedPrivacy: boolean;
 }
 
+// Profile update data structure
+export interface ProfileData {
+  fullName: string;
+  role: string;
+  country: string;
+}
+
 // Interface for auth storage operations
 // (IMPORTANT) These user operations are mandatory for Replit Auth.
 export interface IAuthStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   updateOnboarding(userId: string, data: OnboardingData): Promise<User>;
+  updateProfile(userId: string, data: ProfileData): Promise<User>;
 }
 
 class AuthStorage implements IAuthStorage {
@@ -110,6 +118,20 @@ class AuthStorage implements IAuthStorage {
         acceptedTerms: data.acceptedTerms,
         acceptedPrivacy: data.acceptedPrivacy,
         onboardingCompleted: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
+  }
+
+  async updateProfile(userId: string, data: ProfileData): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        fullName: data.fullName,
+        role: data.role,
+        country: data.country,
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId))

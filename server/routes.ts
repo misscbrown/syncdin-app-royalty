@@ -30,6 +30,15 @@ const onboardingSchema = z.object({
   }),
 });
 
+// Zod schema for profile update validation
+const profileUpdateSchema = z.object({
+  fullName: z.string().min(2, "Name must be at least 2 characters"),
+  role: z.enum(["Artist", "Label", "Distributor", "Manager"], {
+    required_error: "Please select your role",
+  }),
+  country: z.string().min(1, "Please select your country/region"),
+});
+
 // Configure multer for file uploads
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -253,6 +262,32 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error('Onboarding error:', error);
       res.status(500).json({ error: 'Failed to complete onboarding' });
+    }
+  });
+
+  // Update user profile
+  app.patch('/api/profile', isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any)?.claims?.sub;
+      
+      // Validate request body with Zod
+      const parseResult = profileUpdateSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        const firstError = parseResult.error.errors[0];
+        return res.status(400).json({ error: firstError.message });
+      }
+      
+      const { fullName, role, country } = parseResult.data;
+      
+      const updatedUser = await authStorage.updateProfile(userId, {
+        fullName: fullName.trim(),
+        role,
+        country,
+      });
+      res.json({ success: true, user: updatedUser });
+    } catch (error: any) {
+      console.error('Profile update error:', error);
+      res.status(500).json({ error: 'Failed to update profile' });
     }
   });
 

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, pgEnum, text, varchar, integer, decimal, timestamp, date, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, text, varchar, integer, decimal, timestamp, date, jsonb, unique } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -49,11 +49,11 @@ export const loginSchema = z.object({
 export type SignupInput = z.infer<typeof signupSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 
-// Tracks table - unique tracks by ISRC
+// Tracks table - unique tracks by ISRC per user
 export const tracks = pgTable("tracks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").references(() => users.id), // Owner of this track (nullable for unclaimed data)
-  isrc: text("isrc").notNull().unique(),
+  isrc: text("isrc").notNull(),
   title: text("title").notNull(),
   artist: text("artist").notNull(),
   upc: text("upc"),
@@ -65,7 +65,9 @@ export const tracks = pgTable("tracks", {
   mlcMatchConfidence: mlcMatchConfidenceEnum("mlc_match_confidence"),
   mlcLastCheckedAt: timestamp("mlc_last_checked_at"),
   mlcNotes: text("mlc_notes"), // Manual notes/annotations
-});
+}, (table) => ({
+  userIsrcUnique: unique().on(table.userId, table.isrc),
+}));
 
 export const tracksRelations = relations(tracks, ({ many }) => ({
   royaltyEntries: many(royaltyEntries),
@@ -273,11 +275,11 @@ export const insertPrsStatementSchema = createInsertSchema(prsStatements).omit({
 export type InsertPrsStatement = z.infer<typeof insertPrsStatementSchema>;
 export type PrsStatement = typeof prsStatements.$inferSelect;
 
-// Works - unique musical works (by PRS work number)
+// Works - unique musical works (by PRS work number per user)
 export const works = pgTable("works", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").references(() => users.id), // Owner of this work (nullable for unclaimed data)
-  workNo: text("work_no").notNull().unique(), // PRS Work Number
+  workNo: text("work_no").notNull(), // PRS Work Number
   title: text("title").notNull(),
   ip1: text("ip1"), // Interested Party 1 (writer/composer)
   ip2: text("ip2"), // Interested Party 2
@@ -286,7 +288,9 @@ export const works = pgTable("works", {
   yourSharePercent: decimal("your_share_percent", { precision: 5, scale: 2 }),
   trackId: varchar("track_id").references(() => tracks.id), // Optional link to track by ISRC
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  userWorkNoUnique: unique().on(table.userId, table.workNo),
+}));
 
 export const worksRelations = relations(works, ({ one, many }) => ({
   track: one(tracks, {

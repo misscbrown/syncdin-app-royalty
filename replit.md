@@ -1,274 +1,45 @@
 # RoyaltyTrack - Music Royalty Tracking Application
 
 ## Overview
-A full-stack music royalty tracking application with React + Vite + TailwindCSS frontend and Node.js + Express backend. Features a Spotify-style dark theme with purple and blue accent colors, CSV upload/parsing, track library management, multi-source metadata matching (Spotify + YouTube), and analytics dashboards.
+RoyaltyTrack is a full-stack music royalty tracking application designed to help artists and labels manage their music earnings. It features a React + Vite + TailwindCSS frontend and a Node.js + Express backend. The application supports CSV upload and parsing for royalty statements, comprehensive track library management, multi-source metadata matching (Spotify and YouTube), and analytics dashboards. A key ambition is to provide multi-tenant data isolation, ensuring each user interacts only with their own data. The UI boasts a dark theme inspired by Spotify, utilizing purple and blue accent colors for a modern aesthetic.
 
-## Project Structure
+## User Preferences
+I prefer detailed explanations.
+I want iterative development.
+Ask before making major changes.
+Do not make changes to the folder `attached_assets/`.
 
-```
-├── client/                   # Vite frontend
-│   └── src/
-│       ├── components/       # Reusable components (AppLayout, UI components)
-│       ├── pages/            # Page components
-│       │   ├── Login.tsx          # Login page
-│       │   ├── Signup.tsx         # Signup page
-│       │   ├── Dashboard.tsx      # Main dashboard (protected)
-│       │   ├── UploadTracks.tsx   # CSV file upload
-│       │   ├── TrackLibrary.tsx   # Track listing with stats
-│       │   ├── MetadataMatching.tsx  # Spotify matching & metadata health
-│       │   ├── RoyaltyStatements.tsx # PRS statements & performance royalties
-│       │   ├── PlaybackAnalytics.tsx
-│       │   ├── ReportsExports.tsx
-│       │   ├── MLCVerification.tsx   # MLC status tracking
-│       │   └── Settings.tsx
-│       ├── hooks/            # Custom React hooks
-│       │   └── use-auth.tsx      # Auth context & hooks
-│       ├── lib/              # Utilities (queryClient)
-│       └── styles/           # Theme CSS
-│
-├── server/                   # Express backend
-│   ├── db.ts                 # Database connection (PostgreSQL via Drizzle)
-│   ├── routes.ts             # API endpoints
-│   ├── storage.ts            # Database storage layer
-│   ├── spotify.ts            # Spotify API client
-│   └── youtube.ts            # YouTube Data API v3 client
-│
-├── shared/                   # Shared types and schemas
-│   └── schema.ts             # Drizzle ORM models
-│
-└── attached_assets/          # User-uploaded files
-```
+## System Architecture
+The application follows a client-server architecture. The frontend is built with React, Vite, and TailwindCSS, using `shadcn/ui` for components and `Wouter` for routing. Data fetching is managed by `TanStack Query`, and `Recharts` is used for data visualization. The backend, implemented with Node.js and Express, uses TypeScript and Drizzle ORM for database interactions with PostgreSQL (Neon).
 
-## Database Schema
+### UI/UX Decisions
+- **Theme**: Spotify-style dark theme with purple and blue accent colors.
+- **Components**: Utilizes `shadcn/ui` for a consistent and modern component library.
+- **Pages**: Dedicated pages for Dashboard, Track Upload, Track Library, Metadata Matching, Royalty Statements, Playback Analytics, Reports/Exports, and Settings.
 
-### Tables
-- **users** - User accounts for authentication
-  - id (UUID), email (unique), passwordHash (bcrypt hashed), createdAt
+### Technical Implementations
+- **Authentication**: Standard email/password signup and login with session management.
+- **CSV Processing**: Robust CSV upload mechanism with automatic column mapping for distributor and PRS statement formats.
+- **Multi-Source Metadata Matching**:
+    - **Spotify Integration**: Matches tracks using ISRC or title/artist, storing album art, preview URLs, and popularity.
+    - **YouTube Data API v3 Integration**: Prioritized matching logic (ISRC, Title+Duration, Title+Channel verification, Title+Artist in title, Fuzzy match) with cross-platform validation (Spotify duration). Supports multiple YouTube matches per track with source type classification (OFFICIAL_ARTIST_CHANNEL, LABEL_CHANNEL, TOPIC_VIDEO, OTHER) and confidence scoring. Includes view count tracking as an exposure signal.
+- **Royalty Management**: Handles individual royalty entries linked to tracks and supports PRS performance royalty statement uploads, tracking works and performance data.
+- **MLC Data Model**: Includes fields for MLC verification status, work IDs, match confidence, and notes for future integration.
+- **Multi-Tenant Data Isolation**: All critical data (tracks, uploaded files, PRS statements, works) are associated with a `userId`, enforcing per-user data ownership and uniqueness constraints. A data claiming mechanism is provided for initial user setup.
+- **Re-match Functionality**: Allows single and batch re-matching for Spotify and YouTube integrations.
+- **Multi-match Storage**: Stores all valid YouTube matches, automatically selecting a primary match based on confidence and source type hierarchy.
+- **Songstats Integration**: Fetches social media metrics (TikTok, SoundCloud, Instagram, Snapchat) and combines them with YouTube views for comprehensive playback analytics.
 
-- **tracks** - Unique tracks identified by ISRC
-  - id, isrc (unique), title, artist, upc, createdAt
-  - MLC verification fields:
-    - mlcStatus (unchecked/registered/unregistered/unknown/error, default: unchecked)
-    - mlcWorkId (nullable) - MLC's work identifier
-    - mlcMatchConfidence (low/medium/high, nullable)
-    - mlcLastCheckedAt (timestamp, nullable)
-    - mlcNotes (text, nullable) - manual annotations
-  
-- **royalty_entries** - Individual CSV line items linked to tracks
-  - id, trackId, uploadedFileId, dateInserted, reportingDate, saleMonth
-  - store, countryOfSale, quantity, earnings, teamPercentage, recoup, extras
-  
-- **uploaded_files** - Metadata about uploaded CSV files
-  - id, filename, originalName, fileType, fileSize, recordCount, status, errorMessage
+### Feature Specifications
+- User authentication and authorization.
+- Secure file uploads and processing.
+- Comprehensive track and royalty data management.
+- External API integrations for enriched metadata and social metrics.
+- Detailed analytics and reporting capabilities.
+- Per-user data isolation for privacy and security.
 
-- **track_integrations** - Spotify and YouTube service matches
-  - id, trackId, provider (spotify/youtube), providerId, providerUri
-  - matchedName, matchedArtists, matchedAlbum, albumArt, previewUrl
-  - matchConfidence, matchMethod (isrc/title_artist_duration/title_artist_channel/fuzzy), matchSource
-  - isVerified, popularity, durationMs, providerIsrc
-  - viewCount, channelName, channelId (YouTube-specific)
-  - sourceType (OFFICIAL_ARTIST_CHANNEL/LABEL_CHANNEL/TOPIC_VIDEO/OTHER)
-  - identityConfidence (HIGH/MEDIUM/LOW) - how certain this is the correct track
-  - performanceWeight (HIGH/MEDIUM/LOW) - relevance for performance analytics
-  - videoPublishedAt (YouTube video publish date)
-
-- **prs_statements** - Uploaded PRS performance royalty statement files
-  - id, filename, originalName, statementPeriod, statementDate
-  - totalRoyalties, currency (GBP), workCount, status, errorMessage
-
-- **works** - Unique musical works by PRS work number
-  - id, workNo (unique), title, ip1-ip4 (interested parties/writers)
-  - yourSharePercent, trackId (optional link to track)
-
-- **performance_royalties** - Individual performance entries per work
-  - id, workId, prsStatementId, usageTerritory, broadcastRegion
-  - period, durationSeconds, production, performances, royaltyAmount, currency
-
-## API Endpoints
-
-### Authentication
-- `POST /api/auth/signup` - Create new user account (email, password)
-- `POST /api/auth/login` - Login with email/password, sets session cookie
-- `POST /api/auth/logout` - Logout and destroy session
-- `GET /api/auth/me` - Get current authenticated user
-
-### File Upload
-- `POST /api/upload` - Upload and parse CSV file (multipart/form-data)
-  - Accepts distributor CSVs, royalty statements, metadata sheets
-  - Auto-maps column names to database fields
-  - Creates/updates tracks and royalty entries
-
-### Data Retrieval
-- `GET /api/files` - List all uploaded files
-- `GET /api/tracks` - Get all tracks with aggregated stats (earnings, streams, platforms, countries)
-- `GET /api/tracks/:id` - Get single track
-- `GET /api/tracks/:id/royalties` - Get royalty entries for a track
-- `GET /api/royalties` - Get all royalty entries
-- `GET /api/health` - Health check
-
-### Spotify Integration
-- `GET /api/spotify/status` - Check Spotify connection status
-- `GET /api/spotify/tracks` - Get tracks with Spotify match status
-- `POST /api/spotify/match/:trackId` - Match single track with Spotify
-- `POST /api/spotify/match-batch` - Match multiple tracks (rate-limited)
-- `GET /api/tracks/:id/spotify` - Get Spotify integration for a track
-- `DELETE /api/tracks/:id/spotify` - Remove Spotify match for re-matching
-
-### YouTube Data API v3 Integration
-- `GET /api/youtube/status` - Check YouTube API connection status
-- `POST /api/youtube/match/:trackId` - Match single track with YouTube (includes classification)
-- `POST /api/youtube/match-batch` - Match multiple tracks (rate-limited, 500ms delay)
-- `GET /api/tracks/:id/youtube` - Get YouTube integration for a track
-- `GET /api/tracks/:id/youtube/matches` - Get all potential YouTube matches with classification
-- `POST /api/tracks/:id/youtube/matches` - Store a specific YouTube match from potential matches
-- `DELETE /api/tracks/:id/youtube` - Remove YouTube match for re-matching
-- `GET /api/integrations/tracks` - Get tracks with both Spotify and YouTube status
-- `GET /api/tracks/:id/integrations` - Get all integrations for a track
-
-### YouTube Matching Priority
-1. **ISRC match (100%)** - Searches YouTube for ISRC in video descriptions
-2. **Title + Duration (90%)** - Cross-references with Spotify duration (±5 seconds)
-3. **Title + Channel verification (85%)** - Official/VEVO channels
-4. **Title + Artist in title (75%)** - Artist name appears in video title
-5. **Fuzzy match (<60%)** - Flagged for manual review
-
-### PRS Performance Royalty Statements
-- `GET /api/prs-statements` - List all PRS statements
-- `GET /api/prs-statements/:id` - Get statement with entries
-- `POST /api/prs-statements/upload` - Upload PRS statement CSV
-- `GET /api/works` - Get all works with stats
-- `GET /api/works/:id` - Get work with royalty details
-- `GET /api/performance-royalties` - Get all performance royalties
-- `GET /api/performance-royalties/summary` - Get summary with territory breakdown
-
-## CSV Column Mapping
-
-### Distributor CSVs
-| Expected Field | Supported Variations |
-|---------------|---------------------|
-| isrc | isrc, isrc_code, track_isrc |
-| title | title, track_title, track_name, song_title |
-| artist | artist, artist_name, performer |
-| store | store, dsp, platform, service |
-| earnings | earnings, earnings_(usd), revenue, royalties |
-| quantity | quantity, streams, plays, units |
-| countryOfSale | country_of_sale, country, territory |
-
-### PRS Statement CSVs
-| Expected Field | Supported Variations |
-|---------------|---------------------|
-| workNo | work_no, work no, work number |
-| workTitle | work_title, work title, title |
-| ip1-ip4 | ip1, ip2, ip3, ip4 |
-| yourSharePercent | your_share_%, your share %, share |
-| usageTerritory | usage_&_territory, usage territory |
-| broadcastRegion | broadcast_region, broadcast region, region |
-| period | period |
-| duration | hhhh:mm:ss, duration, time |
-| production | production |
-| performances | performances |
-| royaltyAmount | royalty_£, royalty £, royalty, amount |
-
-## Frontend Routes
-
-- `/` - Dashboard
-- `/upload-tracks` - File Upload page
-- `/track-library` - Track Library with search and sorting
-- `/metadata-matching` - Spotify + YouTube matching & metadata health
-- `/royalty-statements` - PRS statements, works library, analytics
-- `/playback-analytics` - Stream analytics and trends
-- `/reports-exports` - Report generation and MLC comparisons
-- `/settings` - App settings and API connections
-
-## Tech Stack
-
-### Frontend
-- React 18 with TypeScript
-- Vite (build tool)
-- TailwindCSS + shadcn/ui components
-- Wouter (routing)
-- TanStack Query (data fetching)
-- Recharts (charts and visualizations)
-
-### Backend
-- Node.js + Express
-- TypeScript
-- Drizzle ORM
-- PostgreSQL (Neon)
-- csv-parse, multer (file handling)
-- @spotify/web-api-ts-sdk (Spotify integration)
-- googleapis (YouTube Data API v3)
-
-## Running the Application
-
-```bash
-npm run dev        # Start dev server
-npm run db:push    # Push schema changes to database
-```
-
-## Recent Updates
-
-- Added PostgreSQL database with Drizzle ORM
-- Implemented CSV upload with automatic column mapping
-- Created Track Library page with search, sorting, and aggregated stats
-- Connected Upload Files page to real API
-- Added real-time file history from database
-- Integrated Spotify API for metadata matching (ISRC and title/artist search)
-- Created track_integrations table for storing Spotify matches
-- Built Metadata Matching page with batch and single track matching
-- Added PRS performance royalty statement support (prs_statements, works, performance_royalties tables)
-- Built Royalty Statements page with upload, works library, and territory analytics
-- **Integrated YouTube Data API v3** for secondary metadata matching:
-  - Multi-priority matching: ISRC (100%) → Duration (90%) → Channel (85%) → Fuzzy (<60%)
-  - Cross-platform validation using Spotify duration data
-  - YouTube view count tracking as exposure signal
-  - Unified Metadata Matching UI showing both Spotify and YouTube matches
-  - Rate-limited batch matching to respect API quotas
-- **Enhanced YouTube classification system** (Dec 2025):
-  - Multiple YouTube matches per track supported
-  - Source type classification: OFFICIAL_ARTIST_CHANNEL, LABEL_CHANNEL, TOPIC_VIDEO, OTHER
-  - Separate identity confidence and performance weight scoring
-  - UI badges with tooltips explaining source type and confidence levels
-  - YouTube views displayed as "usage signals" (separate from financial data)
-  - Modular architecture ready for additional metadata sources (Radio APIs, sync databases)
-- **Re-match functionality** (Dec 2025):
-  - Single track re-match for Spotify and YouTube (refresh button on matched tracks)
-  - Batch re-match all matched tracks with "Re-match Spotify" and "Re-match YouTube" buttons
-  - YouTube re-match updates classification data (source type, identity confidence, performance weight)
-  - Rate limiting: 200ms for Spotify, 500ms for YouTube batch operations
-- **Multi-match storage with automatic primary selection** (Dec 2025):
-  - All valid YouTube matches stored with `isPrimary` flag in track_integrations
-  - Priority logic: When confidences are within 10%, prefer Official Artist Channel > Label Channel > Topic Video
-  - GET /api/tracks/:id/youtube returns primary match plus all secondary matches
-  - Expandable secondary matches in UI with chevron button to toggle visibility
-  - Topic videos retained as identity confirmation while Official/Label prioritized for performance tracking
-- **Songstats Integration** (Dec 2025):
-  - Fetches social media metrics: TikTok plays/videos, SoundCloud plays, Instagram reach, Snapchat plays
-  - YouTube data excluded (already have our own YouTube Data API integration)
-  - 50 requests/month limit for free tier with quota tracking in social_metrics_usage table
-  - Playback Analytics page updated to combine YouTube views + Songstats social plays
-  - "Refresh Social Metrics" button with loading states and quota warning banner
-  - Platform distribution charts showing all platforms (YouTube, TikTok, SoundCloud, Instagram, Snapchat)
-  - Track-level social metrics with expandable details in Track Details tab
-  - API endpoints: GET /api/social-metrics/status, GET /api/social-metrics/summary, POST /api/social-metrics/refresh-all
-- **MLC Data Model** (Dec 2025):
-  - Added MLC verification fields to tracks table (data model only, no API calls yet)
-  - mlcStatus: unchecked/registered/unregistered/unknown/error (default: unchecked)
-  - mlcWorkId, mlcMatchConfidence, mlcLastCheckedAt, mlcNotes
-  - Future-proof design for manual checks and eventual API integration
-
-## Backlog (Future Improvements)
-
-### High Priority
-1. **Comprehensive Error Handling**
-   - Frontend: Add `isError` handling for all queries/mutations with toast notifications
-   - Backend: Return structured error codes (quota exhausted, track not found, upstream API failure)
-   - CSV upload: Differentiate parsing vs validation errors with specific 4xx responses
-   - External APIs: Surface rate limits and timeouts to users with actionable messages
-
-### Medium Priority
-- Database retry/timeout strategy for connection failures
-- Integration tests to guard against API response shape mismatches
-
-### Ideas / Nice-to-Have
-- (Add future ideas here)
+## External Dependencies
+- **PostgreSQL (Neon)**: Primary database for all application data.
+- **Spotify Web API**: Used for track metadata matching, album art, and popularity data.
+- **YouTube Data API v3**: Used for track matching, video metadata, view counts, and channel classification.
+- **Songstats API**: Used for fetching social media engagement metrics (TikTok, SoundCloud, Instagram, Snapchat).

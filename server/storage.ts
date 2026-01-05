@@ -22,39 +22,39 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   
-  // Tracks
-  getTrack(id: string): Promise<Track | undefined>;
-  getTrackByIsrc(isrc: string): Promise<Track | undefined>;
+  // Tracks (with userId scoping for multi-tenancy)
+  getTrack(id: string, userId: string): Promise<Track | undefined>;
+  getTrackByIsrc(isrc: string, userId: string): Promise<Track | undefined>;
   getAllTracks(userId: string): Promise<Track[]>;
   getTracksWithStats(userId: string): Promise<TrackWithStats[]>;
   createTrack(track: InsertTrack): Promise<Track>;
   upsertTrack(track: InsertTrack): Promise<Track>;
-  updateTrackMlcStatus(id: string, mlcStatus: string, mlcNotes?: string): Promise<Track | undefined>;
+  updateTrackMlcStatus(id: string, userId: string, mlcStatus: string, mlcNotes?: string): Promise<Track | undefined>;
   
-  // Royalty Entries
-  getRoyaltyEntry(id: string): Promise<RoyaltyEntry | undefined>;
-  getRoyaltyEntriesByTrack(trackId: string): Promise<RoyaltyEntry[]>;
-  getRoyaltyEntriesByFile(fileId: string): Promise<RoyaltyEntry[]>;
+  // Royalty Entries (with userId scoping for multi-tenancy)
+  getRoyaltyEntry(id: string, userId: string): Promise<RoyaltyEntry | undefined>;
+  getRoyaltyEntriesByTrack(trackId: string, userId: string): Promise<RoyaltyEntry[]>;
+  getRoyaltyEntriesByFile(fileId: string, userId: string): Promise<RoyaltyEntry[]>;
   getAllRoyaltyEntries(userId: string): Promise<RoyaltyEntry[]>;
   createRoyaltyEntry(entry: InsertRoyaltyEntry): Promise<RoyaltyEntry>;
   createRoyaltyEntries(entries: InsertRoyaltyEntry[]): Promise<RoyaltyEntry[]>;
   
-  // Uploaded Files
-  getUploadedFile(id: string): Promise<UploadedFile | undefined>;
+  // Uploaded Files (with userId scoping for multi-tenancy)
+  getUploadedFile(id: string, userId: string): Promise<UploadedFile | undefined>;
   getAllUploadedFiles(userId: string): Promise<UploadedFile[]>;
   createUploadedFile(file: InsertUploadedFile): Promise<UploadedFile>;
-  updateUploadedFileStatus(id: string, status: string, recordCount?: number, errorMessage?: string): Promise<UploadedFile | undefined>;
+  updateUploadedFileStatus(id: string, userId: string, status: string, recordCount?: number, errorMessage?: string): Promise<UploadedFile | undefined>;
   
-  // Track Integrations
-  getTrackIntegration(trackId: string, provider: string): Promise<TrackIntegration | undefined>;
-  getTrackIntegrations(trackId: string, provider?: string): Promise<TrackIntegration[]>;
-  getTrackIntegrationsByTrack(trackId: string): Promise<TrackIntegration[]>;
-  getAllTrackIntegrations(provider?: string): Promise<TrackIntegration[]>;
-  createTrackIntegration(integration: InsertTrackIntegration): Promise<TrackIntegration>;
-  createTrackIntegrations(integrations: InsertTrackIntegration[]): Promise<TrackIntegration[]>;
-  updateTrackIntegration(id: string, updates: Partial<InsertTrackIntegration>): Promise<TrackIntegration | undefined>;
-  deleteTrackIntegration(id: string): Promise<void>;
-  deleteTrackIntegrationsByProvider(trackId: string, provider: string): Promise<void>;
+  // Track Integrations (with userId scoping for multi-tenancy)
+  getTrackIntegration(trackId: string, provider: string, userId: string): Promise<TrackIntegration | undefined>;
+  getTrackIntegrations(trackId: string, userId: string, provider?: string): Promise<TrackIntegration[]>;
+  getTrackIntegrationsByTrack(trackId: string, userId: string): Promise<TrackIntegration[]>;
+  getAllTrackIntegrations(userId: string, provider?: string): Promise<TrackIntegration[]>;
+  createTrackIntegration(integration: InsertTrackIntegration, userId: string): Promise<TrackIntegration>;
+  createTrackIntegrations(integrations: InsertTrackIntegration[], userId: string): Promise<TrackIntegration[]>;
+  updateTrackIntegration(id: string, updates: Partial<InsertTrackIntegration>, userId: string): Promise<TrackIntegration | undefined>;
+  deleteTrackIntegration(id: string, userId: string): Promise<void>;
+  deleteTrackIntegrationsByProvider(trackId: string, provider: string, userId: string): Promise<void>;
   getTracksWithSpotifyStatus(userId: string): Promise<Array<Track & { spotifyMatched: boolean; spotifyId?: string; albumArt?: string }>>;
   getTracksWithIntegrationStatus(userId: string): Promise<Array<Track & { 
     spotifyMatched: boolean; 
@@ -69,31 +69,31 @@ export interface IStorage {
     matchSource?: string;
   }>>;
   
-  // PRS Statements
-  getPrsStatement(id: string): Promise<PrsStatement | undefined>;
+  // PRS Statements (with userId scoping for multi-tenancy)
+  getPrsStatement(id: string, userId: string): Promise<PrsStatement | undefined>;
   getAllPrsStatements(userId: string): Promise<PrsStatement[]>;
   createPrsStatement(statement: InsertPrsStatement): Promise<PrsStatement>;
-  updatePrsStatementStatus(id: string, status: string, workCount?: number, totalRoyalties?: string, errorMessage?: string): Promise<PrsStatement | undefined>;
+  updatePrsStatementStatus(id: string, userId: string, status: string, workCount?: number, totalRoyalties?: string, errorMessage?: string): Promise<PrsStatement | undefined>;
   
-  // Works
-  getWork(id: string): Promise<Work | undefined>;
-  getWorkByWorkNo(workNo: string): Promise<Work | undefined>;
+  // Works (with userId scoping for multi-tenancy)
+  getWork(id: string, userId: string): Promise<Work | undefined>;
+  getWorkByWorkNo(workNo: string, userId: string): Promise<Work | undefined>;
   getAllWorks(userId: string): Promise<Work[]>;
   getWorksWithStats(userId: string): Promise<WorkWithStats[]>;
   createWork(work: InsertWork): Promise<Work>;
   upsertWork(work: InsertWork): Promise<Work>;
   
-  // Performance Royalties
-  getPerformanceRoyalty(id: string): Promise<PerformanceRoyalty | undefined>;
-  getPerformanceRoyaltiesByWork(workId: string): Promise<PerformanceRoyalty[]>;
-  getPerformanceRoyaltiesByStatement(statementId: string): Promise<PerformanceRoyalty[]>;
+  // Performance Royalties (with userId scoping for multi-tenancy)
+  getPerformanceRoyalty(id: string, userId: string): Promise<PerformanceRoyalty | undefined>;
+  getPerformanceRoyaltiesByWork(workId: string, userId: string): Promise<PerformanceRoyalty[]>;
+  getPerformanceRoyaltiesByStatement(statementId: string, userId: string): Promise<PerformanceRoyalty[]>;
   getAllPerformanceRoyalties(userId: string): Promise<PerformanceRoyalty[]>;
   createPerformanceRoyalty(entry: InsertPerformanceRoyalty): Promise<PerformanceRoyalty>;
   createPerformanceRoyalties(entries: InsertPerformanceRoyalty[]): Promise<PerformanceRoyalty[]>;
   
-  // Social Metrics (Songstats)
-  getSocialMetrics(trackId: string): Promise<SocialMetrics | undefined>;
-  getSocialMetricsByIsrc(isrc: string): Promise<SocialMetrics | undefined>;
+  // Social Metrics (Songstats) (with userId scoping for multi-tenancy)
+  getSocialMetrics(trackId: string, userId: string): Promise<SocialMetrics | undefined>;
+  getSocialMetricsByIsrc(isrc: string, userId: string): Promise<SocialMetrics | undefined>;
   getAllSocialMetrics(userId: string): Promise<SocialMetrics[]>;
   createSocialMetrics(metrics: InsertSocialMetrics): Promise<SocialMetrics>;
   upsertSocialMetrics(metrics: InsertSocialMetrics): Promise<SocialMetrics>;
@@ -130,13 +130,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Tracks
-  async getTrack(id: string): Promise<Track | undefined> {
-    const [track] = await db.select().from(tracks).where(eq(tracks.id, id));
+  async getTrack(id: string, userId: string): Promise<Track | undefined> {
+    const [track] = await db.select().from(tracks)
+      .where(and(eq(tracks.id, id), eq(tracks.userId, userId)));
     return track || undefined;
   }
 
-  async getTrackByIsrc(isrc: string): Promise<Track | undefined> {
-    const [track] = await db.select().from(tracks).where(eq(tracks.isrc, isrc));
+  async getTrackByIsrc(isrc: string, userId: string): Promise<Track | undefined> {
+    const [track] = await db.select().from(tracks)
+      .where(and(eq(tracks.isrc, isrc), eq(tracks.userId, userId)));
     return track || undefined;
   }
 
@@ -172,14 +174,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertTrack(insertTrack: InsertTrack): Promise<Track> {
-    const existing = await this.getTrackByIsrc(insertTrack.isrc);
+    if (!insertTrack.userId) {
+      throw new Error('userId is required for upsertTrack');
+    }
+    const existing = await this.getTrackByIsrc(insertTrack.isrc, insertTrack.userId);
     if (existing) {
       return existing;
     }
     return await this.createTrack(insertTrack);
   }
 
-  async updateTrackMlcStatus(id: string, mlcStatus: string, mlcNotes?: string): Promise<Track | undefined> {
+  async updateTrackMlcStatus(id: string, userId: string, mlcStatus: string, mlcNotes?: string): Promise<Track | undefined> {
     const updateData: Partial<Track> = {
       mlcStatus: mlcStatus as any,
       mlcLastCheckedAt: new Date(),
@@ -189,22 +194,30 @@ export class DatabaseStorage implements IStorage {
     }
     const [updated] = await db.update(tracks)
       .set(updateData)
-      .where(eq(tracks.id, id))
+      .where(and(eq(tracks.id, id), eq(tracks.userId, userId)))
       .returning();
     return updated || undefined;
   }
 
   // Royalty Entries
-  async getRoyaltyEntry(id: string): Promise<RoyaltyEntry | undefined> {
+  async getRoyaltyEntry(id: string, userId: string): Promise<RoyaltyEntry | undefined> {
     const [entry] = await db.select().from(royaltyEntries).where(eq(royaltyEntries.id, id));
-    return entry || undefined;
+    if (!entry) return undefined;
+    // Verify track belongs to user
+    const track = await this.getTrack(entry.trackId, userId);
+    if (!track) return undefined; // User doesn't own this entry's track
+    return entry;
   }
 
-  async getRoyaltyEntriesByTrack(trackId: string): Promise<RoyaltyEntry[]> {
+  async getRoyaltyEntriesByTrack(trackId: string, userId: string): Promise<RoyaltyEntry[]> {
+    const track = await this.getTrack(trackId, userId);
+    if (!track) return [];
     return await db.select().from(royaltyEntries).where(eq(royaltyEntries.trackId, trackId));
   }
 
-  async getRoyaltyEntriesByFile(fileId: string): Promise<RoyaltyEntry[]> {
+  async getRoyaltyEntriesByFile(fileId: string, userId: string): Promise<RoyaltyEntry[]> {
+    const file = await this.getUploadedFile(fileId, userId);
+    if (!file) return [];
     return await db.select().from(royaltyEntries).where(eq(royaltyEntries.uploadedFileId, fileId));
   }
 
@@ -231,8 +244,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Uploaded Files
-  async getUploadedFile(id: string): Promise<UploadedFile | undefined> {
-    const [file] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.id, id));
+  async getUploadedFile(id: string, userId: string): Promise<UploadedFile | undefined> {
+    const [file] = await db.select().from(uploadedFiles)
+      .where(and(eq(uploadedFiles.id, id), eq(uploadedFiles.userId, userId)));
     return file || undefined;
   }
 
@@ -247,6 +261,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateUploadedFileStatus(
     id: string, 
+    userId: string,
     status: string, 
     recordCount?: number, 
     errorMessage?: string
@@ -258,14 +273,15 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db
       .update(uploadedFiles)
       .set(updateData)
-      .where(eq(uploadedFiles.id, id))
+      .where(and(eq(uploadedFiles.id, id), eq(uploadedFiles.userId, userId)))
       .returning();
     return updated || undefined;
   }
 
   // Track Integrations
-  async getTrackIntegration(trackId: string, provider: string): Promise<TrackIntegration | undefined> {
-    // Returns the PRIMARY integration for a track/provider combo
+  async getTrackIntegration(trackId: string, provider: string, userId: string): Promise<TrackIntegration | undefined> {
+    const track = await this.getTrack(trackId, userId);
+    if (!track) return undefined;
     const [integration] = await db
       .select()
       .from(trackIntegrations)
@@ -277,8 +293,9 @@ export class DatabaseStorage implements IStorage {
     return integration || undefined;
   }
 
-  async getTrackIntegrations(trackId: string, provider?: string): Promise<TrackIntegration[]> {
-    // Returns ALL integrations (primary and secondary) for a track
+  async getTrackIntegrations(trackId: string, userId: string, provider?: string): Promise<TrackIntegration[]> {
+    const track = await this.getTrack(trackId, userId);
+    if (!track) return [];
     if (provider) {
       return await db.select().from(trackIntegrations)
         .where(and(eq(trackIntegrations.trackId, trackId), eq(trackIntegrations.provider, provider)))
@@ -289,29 +306,56 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(trackIntegrations.isPrimary));
   }
 
-  async getTrackIntegrationsByTrack(trackId: string): Promise<TrackIntegration[]> {
+  async getTrackIntegrationsByTrack(trackId: string, userId: string): Promise<TrackIntegration[]> {
+    const track = await this.getTrack(trackId, userId);
+    if (!track) return [];
     return await db.select().from(trackIntegrations).where(eq(trackIntegrations.trackId, trackId));
   }
 
-  async getAllTrackIntegrations(provider?: string): Promise<TrackIntegration[]> {
-    if (provider) {
-      return await db.select().from(trackIntegrations).where(eq(trackIntegrations.provider, provider));
-    }
-    return await db.select().from(trackIntegrations);
+  async getAllTrackIntegrations(userId: string, provider?: string): Promise<TrackIntegration[]> {
+    // Filter by tracks owned by the user
+    const result = await db.execute(sql`
+      SELECT ti.*
+      FROM track_integrations ti
+      INNER JOIN tracks t ON ti.track_id = t.id
+      WHERE t.user_id = ${userId}
+      ${provider ? sql`AND ti.provider = ${provider}` : sql``}
+      ORDER BY ti.created_at DESC
+    `);
+    return result.rows as TrackIntegration[];
   }
 
-  async createTrackIntegration(integration: InsertTrackIntegration): Promise<TrackIntegration> {
+  async createTrackIntegration(integration: InsertTrackIntegration, userId: string): Promise<TrackIntegration> {
+    // Verify the trackId belongs to the userId before creating
+    const track = await this.getTrack(integration.trackId, userId);
+    if (!track) {
+      throw new Error('Track not found or does not belong to user');
+    }
     const [result] = await db.insert(trackIntegrations).values(integration).returning();
     return result;
   }
 
-  async createTrackIntegrations(integrations: InsertTrackIntegration[]): Promise<TrackIntegration[]> {
+  async createTrackIntegrations(integrations: InsertTrackIntegration[], userId: string): Promise<TrackIntegration[]> {
     if (integrations.length === 0) return [];
+    // Verify all trackIds belong to the userId before creating
+    const trackIds = [...new Set(integrations.map(i => i.trackId))];
+    for (const trackId of trackIds) {
+      const track = await this.getTrack(trackId, userId);
+      if (!track) {
+        throw new Error(`Track ${trackId} not found or does not belong to user`);
+      }
+    }
     const result = await db.insert(trackIntegrations).values(integrations).returning();
     return result;
   }
 
-  async updateTrackIntegration(id: string, updates: Partial<InsertTrackIntegration>): Promise<TrackIntegration | undefined> {
+  async updateTrackIntegration(id: string, updates: Partial<InsertTrackIntegration>, userId: string): Promise<TrackIntegration | undefined> {
+    // Get the integration first to verify ownership
+    const [existing] = await db.select().from(trackIntegrations).where(eq(trackIntegrations.id, id));
+    if (!existing) return undefined;
+    // Verify the integration's track belongs to user
+    const track = await this.getTrack(existing.trackId, userId);
+    if (!track) return undefined;
     const [updated] = await db
       .update(trackIntegrations)
       .set({ ...updates, updatedAt: new Date() })
@@ -320,11 +364,19 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
-  async deleteTrackIntegration(id: string): Promise<void> {
+  async deleteTrackIntegration(id: string, userId: string): Promise<void> {
+    // Get the integration first to verify ownership
+    const [existing] = await db.select().from(trackIntegrations).where(eq(trackIntegrations.id, id));
+    if (!existing) return;
+    // Verify the integration's track belongs to user
+    const track = await this.getTrack(existing.trackId, userId);
+    if (!track) return; // Silently fail if user doesn't own the track
     await db.delete(trackIntegrations).where(eq(trackIntegrations.id, id));
   }
 
-  async deleteTrackIntegrationsByProvider(trackId: string, provider: string): Promise<void> {
+  async deleteTrackIntegrationsByProvider(trackId: string, provider: string, userId: string): Promise<void> {
+    const track = await this.getTrack(trackId, userId);
+    if (!track) return;
     await db.delete(trackIntegrations).where(
       and(eq(trackIntegrations.trackId, trackId), eq(trackIntegrations.provider, provider))
     );
@@ -407,8 +459,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // PRS Statements
-  async getPrsStatement(id: string): Promise<PrsStatement | undefined> {
-    const [statement] = await db.select().from(prsStatements).where(eq(prsStatements.id, id));
+  async getPrsStatement(id: string, userId: string): Promise<PrsStatement | undefined> {
+    const [statement] = await db.select().from(prsStatements)
+      .where(and(eq(prsStatements.id, id), eq(prsStatements.userId, userId)));
     return statement || undefined;
   }
 
@@ -423,6 +476,7 @@ export class DatabaseStorage implements IStorage {
 
   async updatePrsStatementStatus(
     id: string,
+    userId: string,
     status: string,
     workCount?: number,
     totalRoyalties?: string,
@@ -436,19 +490,21 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db
       .update(prsStatements)
       .set(updateData)
-      .where(eq(prsStatements.id, id))
+      .where(and(eq(prsStatements.id, id), eq(prsStatements.userId, userId)))
       .returning();
     return updated || undefined;
   }
 
   // Works
-  async getWork(id: string): Promise<Work | undefined> {
-    const [work] = await db.select().from(works).where(eq(works.id, id));
+  async getWork(id: string, userId: string): Promise<Work | undefined> {
+    const [work] = await db.select().from(works)
+      .where(and(eq(works.id, id), eq(works.userId, userId)));
     return work || undefined;
   }
 
-  async getWorkByWorkNo(workNo: string): Promise<Work | undefined> {
-    const [work] = await db.select().from(works).where(eq(works.workNo, workNo));
+  async getWorkByWorkNo(workNo: string, userId: string): Promise<Work | undefined> {
+    const [work] = await db.select().from(works)
+      .where(and(eq(works.workNo, workNo), eq(works.userId, userId)));
     return work || undefined;
   }
 
@@ -488,7 +544,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertWork(work: InsertWork): Promise<Work> {
-    const existing = await this.getWorkByWorkNo(work.workNo);
+    if (!work.userId) {
+      throw new Error('userId is required for upsertWork');
+    }
+    const existing = await this.getWorkByWorkNo(work.workNo, work.userId);
     if (existing) {
       return existing;
     }
@@ -496,16 +555,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Performance Royalties
-  async getPerformanceRoyalty(id: string): Promise<PerformanceRoyalty | undefined> {
+  async getPerformanceRoyalty(id: string, userId: string): Promise<PerformanceRoyalty | undefined> {
     const [entry] = await db.select().from(performanceRoyalties).where(eq(performanceRoyalties.id, id));
-    return entry || undefined;
+    if (!entry) return undefined;
+    // Verify work belongs to user
+    const work = await this.getWork(entry.workId, userId);
+    if (!work) return undefined; // User doesn't own this entry's work
+    return entry;
   }
 
-  async getPerformanceRoyaltiesByWork(workId: string): Promise<PerformanceRoyalty[]> {
+  async getPerformanceRoyaltiesByWork(workId: string, userId: string): Promise<PerformanceRoyalty[]> {
+    const work = await this.getWork(workId, userId);
+    if (!work) return [];
     return await db.select().from(performanceRoyalties).where(eq(performanceRoyalties.workId, workId));
   }
 
-  async getPerformanceRoyaltiesByStatement(statementId: string): Promise<PerformanceRoyalty[]> {
+  async getPerformanceRoyaltiesByStatement(statementId: string, userId: string): Promise<PerformanceRoyalty[]> {
+    const statement = await this.getPrsStatement(statementId, userId);
+    if (!statement) return [];
     return await db.select().from(performanceRoyalties).where(eq(performanceRoyalties.prsStatementId, statementId));
   }
 
@@ -532,14 +599,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Social Metrics (Songstats)
-  async getSocialMetrics(trackId: string): Promise<SocialMetrics | undefined> {
+  async getSocialMetrics(trackId: string, userId: string): Promise<SocialMetrics | undefined> {
+    const track = await this.getTrack(trackId, userId);
+    if (!track) return undefined;
     const [metrics] = await db.select().from(socialMetrics).where(eq(socialMetrics.trackId, trackId));
     return metrics || undefined;
   }
 
-  async getSocialMetricsByIsrc(isrc: string): Promise<SocialMetrics | undefined> {
-    const [metrics] = await db.select().from(socialMetrics).where(eq(socialMetrics.isrc, isrc));
-    return metrics || undefined;
+  async getSocialMetricsByIsrc(isrc: string, userId: string): Promise<SocialMetrics | undefined> {
+    const result = await db.execute(sql`
+      SELECT sm.*
+      FROM social_metrics sm
+      INNER JOIN tracks t ON sm.track_id = t.id
+      WHERE sm.isrc = ${isrc} AND t.user_id = ${userId}
+    `);
+    const rows = result.rows as SocialMetrics[];
+    return rows[0] || undefined;
   }
 
   async getAllSocialMetrics(userId: string): Promise<SocialMetrics[]> {
@@ -622,32 +697,64 @@ export class DatabaseStorage implements IStorage {
     statementsUpdated: number; 
     worksUpdated: number;
   }> {
-    const tracksResult = await db.update(tracks)
-      .set({ userId })
-      .where(isNull(tracks.userId))
-      .returning();
-    
-    const filesResult = await db.update(uploadedFiles)
-      .set({ userId })
-      .where(isNull(uploadedFiles.userId))
-      .returning();
-    
-    const statementsResult = await db.update(prsStatements)
-      .set({ userId })
-      .where(isNull(prsStatements.userId))
-      .returning();
-    
-    const worksResult = await db.update(works)
-      .set({ userId })
-      .where(isNull(works.userId))
-      .returning();
+    return await db.transaction(async (tx) => {
+      const [unclaimedCheck] = await tx.select({ count: sql`count(*)` })
+        .from(tracks)
+        .where(isNull(tracks.userId));
+      const unclaimedCount = Number(unclaimedCheck?.count || 0);
+      
+      if (unclaimedCount === 0) {
+        const [filesCheck] = await tx.select({ count: sql`count(*)` })
+          .from(uploadedFiles)
+          .where(isNull(uploadedFiles.userId));
+        const [statementsCheck] = await tx.select({ count: sql`count(*)` })
+          .from(prsStatements)
+          .where(isNull(prsStatements.userId));
+        const [worksCheck] = await tx.select({ count: sql`count(*)` })
+          .from(works)
+          .where(isNull(works.userId));
+        
+        const totalUnclaimed = Number(filesCheck?.count || 0) + 
+                               Number(statementsCheck?.count || 0) + 
+                               Number(worksCheck?.count || 0);
+        
+        if (totalUnclaimed === 0) {
+          return {
+            tracksUpdated: 0,
+            filesUpdated: 0,
+            statementsUpdated: 0,
+            worksUpdated: 0,
+          };
+        }
+      }
+      
+      const tracksResult = await tx.update(tracks)
+        .set({ userId })
+        .where(isNull(tracks.userId))
+        .returning();
+      
+      const filesResult = await tx.update(uploadedFiles)
+        .set({ userId })
+        .where(isNull(uploadedFiles.userId))
+        .returning();
+      
+      const statementsResult = await tx.update(prsStatements)
+        .set({ userId })
+        .where(isNull(prsStatements.userId))
+        .returning();
+      
+      const worksResult = await tx.update(works)
+        .set({ userId })
+        .where(isNull(works.userId))
+        .returning();
 
-    return {
-      tracksUpdated: tracksResult.length,
-      filesUpdated: filesResult.length,
-      statementsUpdated: statementsResult.length,
-      worksUpdated: worksResult.length,
-    };
+      return {
+        tracksUpdated: tracksResult.length,
+        filesUpdated: filesResult.length,
+        statementsUpdated: statementsResult.length,
+        worksUpdated: worksResult.length,
+      };
+    });
   }
 }
 

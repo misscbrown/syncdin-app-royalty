@@ -370,7 +370,7 @@ export async function registerRoutes(
         const records = await parseCSV(req.file.buffer);
         
         if (records.length === 0) {
-          await storage.updateUploadedFileStatus(uploadedFile.id, 'failed', 0, 'No records found in CSV');
+          await storage.updateUploadedFileStatus(uploadedFile.id, userId, 'failed', 0, 'No records found in CSV');
           return res.status(400).json({ error: 'No records found in CSV' });
         }
 
@@ -387,7 +387,8 @@ export async function registerRoutes(
         
         if (!hasIsrc || !hasTitle || !hasArtist) {
           await storage.updateUploadedFileStatus(
-            uploadedFile.id, 
+            uploadedFile.id,
+            userId,
             'failed', 
             0, 
             'Missing required columns: ISRC, Title, or Artist'
@@ -493,7 +494,7 @@ export async function registerRoutes(
         }
 
         // Update file status
-        await storage.updateUploadedFileStatus(uploadedFile.id, 'completed', royaltyEntries.length);
+        await storage.updateUploadedFileStatus(uploadedFile.id, userId, 'completed', royaltyEntries.length);
 
         res.json({
           success: true,
@@ -507,7 +508,7 @@ export async function registerRoutes(
         });
 
       } catch (parseError: any) {
-        await storage.updateUploadedFileStatus(uploadedFile.id, 'failed', 0, parseError.message);
+        await storage.updateUploadedFileStatus(uploadedFile.id, userId, 'failed', 0, parseError.message);
         throw parseError;
       }
 
@@ -538,9 +539,9 @@ export async function registerRoutes(
   });
 
   // Get single track
-  app.get('/api/tracks/:id', async (req, res) => {
+  app.get('/api/tracks/:id', requireAuth, async (req, res) => {
     try {
-      const track = await storage.getTrack(req.params.id);
+      const track = await storage.getTrack(req.params.id, req.session.userId!);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
       }
@@ -551,9 +552,14 @@ export async function registerRoutes(
   });
 
   // Get royalty entries for a track
-  app.get('/api/tracks/:id/royalties', async (req, res) => {
+  app.get('/api/tracks/:id/royalties', requireAuth, async (req, res) => {
     try {
-      const entries = await storage.getRoyaltyEntriesByTrack(req.params.id);
+      const userId = req.session.userId!;
+      const track = await storage.getTrack(req.params.id, userId);
+      if (!track) {
+        return res.status(404).json({ error: 'Track not found' });
+      }
+      const entries = await storage.getRoyaltyEntriesByTrack(req.params.id, userId);
       res.json(entries);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -561,12 +567,13 @@ export async function registerRoutes(
   });
 
   // Update MLC status for a track (manual check)
-  app.patch('/api/tracks/:id/mlc-status', async (req, res) => {
+  app.patch('/api/tracks/:id/mlc-status', requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const { mlcStatus, mlcNotes } = req.body;
+      const userId = req.session.userId!;
       
-      const track = await storage.getTrack(id);
+      const track = await storage.getTrack(id, userId);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
       }
@@ -576,7 +583,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: 'Invalid MLC status' });
       }
       
-      const updated = await storage.updateTrackMlcStatus(id, mlcStatus || 'unknown', mlcNotes);
+      const updated = await storage.updateTrackMlcStatus(id, userId, mlcStatus || 'unknown', mlcNotes);
       res.json(updated);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -618,18 +625,19 @@ export async function registerRoutes(
   });
 
   // Match a single track with Spotify
-  app.post('/api/spotify/match/:trackId', async (req, res) => {
+  app.post('/api/spotify/match/:trackId', requireAuth, async (req, res) => {
     try {
       const { trackId } = req.params;
+      const userId = req.session.userId!;
       
       // Get the track
-      const track = await storage.getTrack(trackId);
+      const track = await storage.getTrack(trackId, userId);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
       }
       
       // Check if already matched
-      const existingMatch = await storage.getTrackIntegration(trackId, 'spotify');
+      const existingMatch = await storage.getTrackIntegration(trackId, 'spotify', userId);
       if (existingMatch) {
         return res.json({ 
           success: true, 
@@ -666,7 +674,7 @@ export async function registerRoutes(
         providerIsrc: spotifyMatch.isrc,
       };
       
-      const savedIntegration = await storage.createTrackIntegration(integration);
+      const savedIntegration = await storage.createTrackIntegration(integration, userId);
       
       res.json({ 
         success: true, 
@@ -679,9 +687,10 @@ export async function registerRoutes(
   });
 
   // Batch match multiple tracks with Spotify
-  app.post('/api/spotify/match-batch', async (req, res) => {
+  app.post('/api/spotify/match-batch', requireAuth, async (req, res) => {
     try {
       const { trackIds } = req.body;
+      const userId = req.session.userId!;
       
       if (!Array.isArray(trackIds) || trackIds.length === 0) {
         return res.status(400).json({ error: 'trackIds array is required' });
@@ -703,7 +712,7 @@ export async function registerRoutes(
       for (const trackId of trackIds) {
         try {
           // Check if already matched
-          const existingMatch = await storage.getTrackIntegration(trackId, 'spotify');
+          const existingMatch = await storage.getTrackIntegration(trackId, 'spotify', userId);
           if (existingMatch) {
             results.skipped++;
             results.details.push({ trackId, status: 'skipped', spotifyId: existingMatch.providerId });
@@ -711,7 +720,7 @@ export async function registerRoutes(
           }
           
           // Get the track
-          const track = await storage.getTrack(trackId);
+          const track = await storage.getTrack(trackId, userId);
           if (!track) {
             results.failed++;
             results.details.push({ trackId, status: 'not_found' });
@@ -745,7 +754,7 @@ export async function registerRoutes(
             providerIsrc: spotifyMatch.isrc,
           };
           
-          await storage.createTrackIntegration(integration);
+          await storage.createTrackIntegration(integration, userId);
           results.matched++;
           results.details.push({ trackId, status: 'matched', spotifyId: spotifyMatch.spotifyId });
           
@@ -766,9 +775,14 @@ export async function registerRoutes(
   });
 
   // Get Spotify integration for a track
-  app.get('/api/tracks/:id/spotify', async (req, res) => {
+  app.get('/api/tracks/:id/spotify', requireAuth, async (req, res) => {
     try {
-      const integration = await storage.getTrackIntegration(req.params.id, 'spotify');
+      const userId = req.session.userId!;
+      const track = await storage.getTrack(req.params.id, userId);
+      if (!track) {
+        return res.status(404).json({ error: 'Track not found' });
+      }
+      const integration = await storage.getTrackIntegration(req.params.id, 'spotify', userId);
       if (!integration) {
         return res.status(404).json({ error: 'No Spotify match found' });
       }
@@ -779,13 +793,18 @@ export async function registerRoutes(
   });
 
   // Delete a Spotify match (for re-matching)
-  app.delete('/api/tracks/:id/spotify', async (req, res) => {
+  app.delete('/api/tracks/:id/spotify', requireAuth, async (req, res) => {
     try {
-      const integration = await storage.getTrackIntegration(req.params.id, 'spotify');
+      const userId = req.session.userId!;
+      const track = await storage.getTrack(req.params.id, userId);
+      if (!track) {
+        return res.status(404).json({ error: 'Track not found' });
+      }
+      const integration = await storage.getTrackIntegration(req.params.id, 'spotify', userId);
       if (!integration) {
         return res.status(404).json({ error: 'No Spotify match found' });
       }
-      await storage.deleteTrackIntegration(integration.id);
+      await storage.deleteTrackIntegration(integration.id, userId);
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -793,19 +812,20 @@ export async function registerRoutes(
   });
 
   // Re-match a track with Spotify (delete existing + match again)
-  app.post('/api/spotify/rematch/:trackId', async (req, res) => {
+  app.post('/api/spotify/rematch/:trackId', requireAuth, async (req, res) => {
     try {
       const { trackId } = req.params;
+      const userId = req.session.userId!;
       
-      const track = await storage.getTrack(trackId);
+      const track = await storage.getTrack(trackId, userId);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
       }
       
       // Delete existing match if present
-      const existingMatch = await storage.getTrackIntegration(trackId, 'spotify');
+      const existingMatch = await storage.getTrackIntegration(trackId, 'spotify', userId);
       if (existingMatch) {
-        await storage.deleteTrackIntegration(existingMatch.id);
+        await storage.deleteTrackIntegration(existingMatch.id, userId);
       }
       
       // Try to match with Spotify
@@ -840,7 +860,7 @@ export async function registerRoutes(
         providerIsrc: spotifyMatch.isrc,
       };
       
-      const saved = await storage.createTrackIntegration(integration);
+      const saved = await storage.createTrackIntegration(integration, userId);
       
       res.json({ 
         success: true, 
@@ -855,9 +875,10 @@ export async function registerRoutes(
   });
 
   // Batch re-match multiple tracks with Spotify
-  app.post('/api/spotify/rematch-batch', async (req, res) => {
+  app.post('/api/spotify/rematch-batch', requireAuth, async (req, res) => {
     try {
       const { trackIds } = req.body;
+      const userId = req.session.userId!;
       
       if (!Array.isArray(trackIds) || trackIds.length === 0) {
         return res.status(400).json({ error: 'trackIds array is required' });
@@ -867,7 +888,7 @@ export async function registerRoutes(
       
       for (const trackId of trackIds) {
         try {
-          const track = await storage.getTrack(trackId);
+          const track = await storage.getTrack(trackId, userId);
           if (!track) {
             results.failed++;
             results.details.push({ trackId, status: 'not_found' });
@@ -875,9 +896,9 @@ export async function registerRoutes(
           }
           
           // Delete existing match if present
-          const existingMatch = await storage.getTrackIntegration(trackId, 'spotify');
+          const existingMatch = await storage.getTrackIntegration(trackId, 'spotify', userId);
           if (existingMatch) {
-            await storage.deleteTrackIntegration(existingMatch.id);
+            await storage.deleteTrackIntegration(existingMatch.id, userId);
           }
           
           // Try to match
@@ -909,7 +930,7 @@ export async function registerRoutes(
             providerIsrc: spotifyMatch.isrc,
           };
           
-          await storage.createTrackIntegration(integration);
+          await storage.createTrackIntegration(integration, userId);
           results.matched++;
           results.details.push({ trackId, status: 'matched', spotifyId: spotifyMatch.spotifyId });
           
@@ -953,18 +974,19 @@ export async function registerRoutes(
   });
 
   // Match a single track with YouTube (stores all valid matches with isPrimary flag)
-  app.post('/api/youtube/match/:trackId', async (req, res) => {
+  app.post('/api/youtube/match/:trackId', requireAuth, async (req, res) => {
     try {
       const { trackId } = req.params;
+      const userId = req.session.userId!;
       
       // Get the track
-      const track = await storage.getTrack(trackId);
+      const track = await storage.getTrack(trackId, userId);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
       }
       
       // Check if already matched on YouTube
-      const existingMatches = await storage.getTrackIntegrations(trackId, 'youtube');
+      const existingMatches = await storage.getTrackIntegrations(trackId, userId, 'youtube');
       if (existingMatches.length > 0) {
         const primaryMatch = existingMatches.find(m => m.isPrimary === 'true') || existingMatches[0];
         return res.json({ 
@@ -976,7 +998,7 @@ export async function registerRoutes(
       }
       
       // Get Spotify match for duration cross-reference
-      const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify');
+      const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify', userId);
       const spotifyDurationMs = spotifyMatch?.durationMs || null;
       
       // Get multi-match results with classification (includes priority sorting)
@@ -1012,7 +1034,7 @@ export async function registerRoutes(
         isPrimary: index === 0 ? 'true' : 'false', // First match is primary
       }));
       
-      const savedIntegrations = await storage.createTrackIntegrations(integrations);
+      const savedIntegrations = await storage.createTrackIntegrations(integrations, userId);
       const primaryIntegration = savedIntegrations[0];
       
       res.json({ 
@@ -1030,9 +1052,10 @@ export async function registerRoutes(
   });
 
   // Batch match multiple tracks with YouTube (stores all valid matches per track)
-  app.post('/api/youtube/match-batch', async (req, res) => {
+  app.post('/api/youtube/match-batch', requireAuth, async (req, res) => {
     try {
       const { trackIds } = req.body;
+      const userId = req.session.userId!;
       
       if (!Array.isArray(trackIds) || trackIds.length === 0) {
         return res.status(400).json({ error: 'trackIds array is required' });
@@ -1056,7 +1079,7 @@ export async function registerRoutes(
       for (const trackId of trackIds) {
         try {
           // Check if already matched
-          const existingMatches = await storage.getTrackIntegrations(trackId, 'youtube');
+          const existingMatches = await storage.getTrackIntegrations(trackId, userId, 'youtube');
           if (existingMatches.length > 0) {
             results.skipped++;
             const primary = existingMatches.find(m => m.isPrimary === 'true') || existingMatches[0];
@@ -1065,7 +1088,7 @@ export async function registerRoutes(
           }
           
           // Get the track
-          const track = await storage.getTrack(trackId);
+          const track = await storage.getTrack(trackId, userId);
           if (!track) {
             results.failed++;
             results.details.push({ trackId, status: 'not_found' });
@@ -1073,7 +1096,7 @@ export async function registerRoutes(
           }
           
           // Get Spotify match for duration cross-reference
-          const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify');
+          const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify', userId);
           const spotifyDurationMs = spotifyMatch?.durationMs || null;
           
           // Get multi-match results with classification
@@ -1110,7 +1133,7 @@ export async function registerRoutes(
             isPrimary: index === 0 ? 'true' : 'false',
           }));
           
-          await storage.createTrackIntegrations(integrations);
+          await storage.createTrackIntegrations(integrations, userId);
           results.matched++;
           results.totalSecondaryMatches += integrations.length - 1;
           results.details.push({ 
@@ -1140,9 +1163,14 @@ export async function registerRoutes(
   });
 
   // Get YouTube integration for a track (returns primary + all matches info)
-  app.get('/api/tracks/:id/youtube', async (req, res) => {
+  app.get('/api/tracks/:id/youtube', requireAuth, async (req, res) => {
     try {
-      const allMatches = await storage.getTrackIntegrations(req.params.id, 'youtube');
+      const userId = req.session.userId!;
+      const track = await storage.getTrack(req.params.id, userId);
+      if (!track) {
+        return res.status(404).json({ error: 'Track not found' });
+      }
+      const allMatches = await storage.getTrackIntegrations(req.params.id, userId, 'youtube');
       if (allMatches.length === 0) {
         return res.status(404).json({ error: 'No YouTube match found' });
       }
@@ -1159,22 +1187,23 @@ export async function registerRoutes(
   });
 
   // Get all potential YouTube matches for a track (multi-match with classification)
-  app.get('/api/tracks/:id/youtube/matches', async (req, res) => {
+  app.get('/api/tracks/:id/youtube/matches', requireAuth, async (req, res) => {
     try {
-      const track = await storage.getTrack(req.params.id);
+      const track = await storage.getTrack(req.params.id, req.session.userId!);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
       }
       
       // Get Spotify match for duration cross-reference
-      const spotifyMatch = await storage.getTrackIntegration(req.params.id, 'spotify');
+      const userId = req.session.userId!;
+      const spotifyMatch = await storage.getTrackIntegration(req.params.id, 'spotify', userId);
       const spotifyDurationMs = spotifyMatch?.durationMs || null;
       
       // Get multi-match results
       const multiResult = await matchTrackOnYouTubeMulti(track.title, track.artist, track.isrc, spotifyDurationMs);
       
       // Get stored integrations for this track
-      const storedMatches = await storage.getTrackIntegrations(req.params.id, 'youtube');
+      const storedMatches = await storage.getTrackIntegrations(req.params.id, userId, 'youtube');
       
       res.json({
         track: {
@@ -1207,7 +1236,7 @@ export async function registerRoutes(
   });
   
   // Store a specific YouTube match for a track
-  app.post('/api/tracks/:id/youtube/matches', async (req, res) => {
+  app.post('/api/tracks/:id/youtube/matches', requireAuth, async (req, res) => {
     try {
       const matchData = req.body;
       
@@ -1215,13 +1244,14 @@ export async function registerRoutes(
         return res.status(400).json({ error: 'videoId is required' });
       }
       
-      const track = await storage.getTrack(req.params.id);
+      const userId = req.session.userId!;
+      const track = await storage.getTrack(req.params.id, userId);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
       }
       
       // Check if this video is already stored for this track
-      const existingMatches = await storage.getTrackIntegrations(req.params.id, 'youtube');
+      const existingMatches = await storage.getTrackIntegrations(req.params.id, userId, 'youtube');
       const alreadyStored = existingMatches?.some((m: any) => m.providerId === matchData.videoId);
       
       if (alreadyStored) {
@@ -1250,7 +1280,7 @@ export async function registerRoutes(
         videoPublishedAt: matchData.publishedAt,
       };
       
-      const saved = await storage.createTrackIntegration(integration);
+      const saved = await storage.createTrackIntegration(integration, userId);
       res.json({ success: true, integration: saved });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1258,13 +1288,18 @@ export async function registerRoutes(
   });
 
   // Delete all YouTube matches for a track (for re-matching)
-  app.delete('/api/tracks/:id/youtube', async (req, res) => {
+  app.delete('/api/tracks/:id/youtube', requireAuth, async (req, res) => {
     try {
-      const integrations = await storage.getTrackIntegrations(req.params.id, 'youtube');
+      const userId = req.session.userId!;
+      const track = await storage.getTrack(req.params.id, userId);
+      if (!track) {
+        return res.status(404).json({ error: 'Track not found' });
+      }
+      const integrations = await storage.getTrackIntegrations(req.params.id, userId, 'youtube');
       if (integrations.length === 0) {
         return res.status(404).json({ error: 'No YouTube matches found' });
       }
-      await storage.deleteTrackIntegrationsByProvider(req.params.id, 'youtube');
+      await storage.deleteTrackIntegrationsByProvider(req.params.id, 'youtube', userId);
       res.json({ success: true, deleted: integrations.length });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1272,20 +1307,21 @@ export async function registerRoutes(
   });
 
   // Re-match a track with YouTube (delete all existing + store all new matches with classification)
-  app.post('/api/youtube/rematch/:trackId', async (req, res) => {
+  app.post('/api/youtube/rematch/:trackId', requireAuth, async (req, res) => {
     try {
       const { trackId } = req.params;
+      const userId = req.session.userId!;
       
-      const track = await storage.getTrack(trackId);
+      const track = await storage.getTrack(trackId, userId);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
       }
       
       // Delete ALL existing YouTube matches for this track
-      await storage.deleteTrackIntegrationsByProvider(trackId, 'youtube');
+      await storage.deleteTrackIntegrationsByProvider(trackId, 'youtube', userId);
       
       // Get Spotify match for duration cross-reference
-      const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify');
+      const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify', userId);
       const spotifyDurationMs = spotifyMatch?.durationMs || null;
       
       // Try to match with YouTube using multi-match (includes classification + priority sorting)
@@ -1321,7 +1357,7 @@ export async function registerRoutes(
         isPrimary: index === 0 ? 'true' : 'false',
       }));
       
-      const savedIntegrations = await storage.createTrackIntegrations(integrations);
+      const savedIntegrations = await storage.createTrackIntegrations(integrations, userId);
       const primaryMatch = multiResult.matches[0];
       
       res.json({ 
@@ -1342,9 +1378,10 @@ export async function registerRoutes(
   });
 
   // Batch re-match multiple tracks with YouTube (stores all matches with classification)
-  app.post('/api/youtube/rematch-batch', async (req, res) => {
+  app.post('/api/youtube/rematch-batch', requireAuth, async (req, res) => {
     try {
       const { trackIds } = req.body;
+      const userId = req.session.userId!;
       
       if (!Array.isArray(trackIds) || trackIds.length === 0) {
         return res.status(400).json({ error: 'trackIds array is required' });
@@ -1359,7 +1396,7 @@ export async function registerRoutes(
       
       for (const trackId of trackIds) {
         try {
-          const track = await storage.getTrack(trackId);
+          const track = await storage.getTrack(trackId, userId);
           if (!track) {
             results.failed++;
             results.details.push({ trackId, status: 'not_found' });
@@ -1367,10 +1404,10 @@ export async function registerRoutes(
           }
           
           // Delete ALL existing YouTube matches for this track
-          await storage.deleteTrackIntegrationsByProvider(trackId, 'youtube');
+          await storage.deleteTrackIntegrationsByProvider(trackId, 'youtube', userId);
           
           // Get Spotify duration for cross-reference
-          const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify');
+          const spotifyMatch = await storage.getTrackIntegration(trackId, 'spotify', userId);
           const spotifyDurationMs = spotifyMatch?.durationMs || null;
           
           // Get all matches with multi-match (includes priority sorting)
@@ -1407,7 +1444,7 @@ export async function registerRoutes(
             isPrimary: index === 0 ? 'true' : 'false',
           }));
           
-          await storage.createTrackIntegrations(integrations);
+          await storage.createTrackIntegrations(integrations, userId);
           results.matched++;
           results.totalSecondaryMatches += integrations.length - 1;
           results.details.push({ 
@@ -1434,9 +1471,14 @@ export async function registerRoutes(
   });
 
   // Get all integrations for a track (Spotify + YouTube)
-  app.get('/api/tracks/:id/integrations', async (req, res) => {
+  app.get('/api/tracks/:id/integrations', requireAuth, async (req, res) => {
     try {
-      const integrations = await storage.getTrackIntegrationsByTrack(req.params.id);
+      const userId = req.session.userId!;
+      const track = await storage.getTrack(req.params.id, userId);
+      if (!track) {
+        return res.status(404).json({ error: 'Track not found' });
+      }
+      const integrations = await storage.getTrackIntegrationsByTrack(req.params.id, userId);
       res.json(integrations);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1458,13 +1500,14 @@ export async function registerRoutes(
   });
 
   // Get single PRS statement with summary
-  app.get('/api/prs-statements/:id', async (req, res) => {
+  app.get('/api/prs-statements/:id', requireAuth, async (req, res) => {
     try {
-      const statement = await storage.getPrsStatement(req.params.id);
+      const userId = req.session.userId!;
+      const statement = await storage.getPrsStatement(req.params.id, userId);
       if (!statement) {
         return res.status(404).json({ error: 'Statement not found' });
       }
-      const entries = await storage.getPerformanceRoyaltiesByStatement(req.params.id);
+      const entries = await storage.getPerformanceRoyaltiesByStatement(req.params.id, userId);
       res.json({ ...statement, entries });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1630,6 +1673,7 @@ export async function registerRoutes(
       // Update statement status
       await storage.updatePrsStatementStatus(
         statement.id,
+        userId,
         'completed',
         workMap.size,
         totalRoyalties.toFixed(2)
@@ -1659,13 +1703,14 @@ export async function registerRoutes(
   });
 
   // Get single work with performance royalties
-  app.get('/api/works/:id', async (req, res) => {
+  app.get('/api/works/:id', requireAuth, async (req, res) => {
     try {
-      const work = await storage.getWork(req.params.id);
+      const userId = req.session.userId!;
+      const work = await storage.getWork(req.params.id, userId);
       if (!work) {
         return res.status(404).json({ error: 'Work not found' });
       }
-      const royalties = await storage.getPerformanceRoyaltiesByWork(req.params.id);
+      const royalties = await storage.getPerformanceRoyaltiesByWork(req.params.id, userId);
       res.json({ ...work, royalties });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1721,7 +1766,7 @@ export async function registerRoutes(
     try {
       // Get all data sources
       const tracks = await storage.getTracksWithStats(req.session.userId!);
-      const allIntegrations = await storage.getAllTrackIntegrations();
+      const allIntegrations = await storage.getAllTrackIntegrations(req.session.userId!);
       const royaltyEntries = await storage.getAllRoyaltyEntries(req.session.userId!);
       const prsStatements = await storage.getAllPrsStatements(req.session.userId!);
       const works = await storage.getWorksWithStats(req.session.userId!);
@@ -1877,10 +1922,15 @@ export async function registerRoutes(
   });
 
   // Get social metrics for a specific track
-  app.get("/api/social-metrics/:trackId", async (req, res) => {
+  app.get("/api/social-metrics/:trackId", requireAuth, async (req, res) => {
     try {
       const { trackId } = req.params;
-      const metrics = await storage.getSocialMetrics(trackId);
+      const userId = req.session.userId!;
+      const track = await storage.getTrack(trackId, userId);
+      if (!track) {
+        return res.status(404).json({ error: "Track not found" });
+      }
+      const metrics = await storage.getSocialMetrics(trackId, userId);
       if (!metrics) {
         return res.status(404).json({ error: "No social metrics found for this track" });
       }

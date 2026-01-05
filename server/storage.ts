@@ -14,7 +14,7 @@ import {
   type SocialMetricsUsage, type InsertSocialMetricsUsage
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, sql, desc, and } from "drizzle-orm";
+import { eq, sql, desc, and, isNull } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -25,8 +25,8 @@ export interface IStorage {
   // Tracks
   getTrack(id: string): Promise<Track | undefined>;
   getTrackByIsrc(isrc: string): Promise<Track | undefined>;
-  getAllTracks(): Promise<Track[]>;
-  getTracksWithStats(): Promise<TrackWithStats[]>;
+  getAllTracks(userId: string): Promise<Track[]>;
+  getTracksWithStats(userId: string): Promise<TrackWithStats[]>;
   createTrack(track: InsertTrack): Promise<Track>;
   upsertTrack(track: InsertTrack): Promise<Track>;
   updateTrackMlcStatus(id: string, mlcStatus: string, mlcNotes?: string): Promise<Track | undefined>;
@@ -35,13 +35,13 @@ export interface IStorage {
   getRoyaltyEntry(id: string): Promise<RoyaltyEntry | undefined>;
   getRoyaltyEntriesByTrack(trackId: string): Promise<RoyaltyEntry[]>;
   getRoyaltyEntriesByFile(fileId: string): Promise<RoyaltyEntry[]>;
-  getAllRoyaltyEntries(): Promise<RoyaltyEntry[]>;
+  getAllRoyaltyEntries(userId: string): Promise<RoyaltyEntry[]>;
   createRoyaltyEntry(entry: InsertRoyaltyEntry): Promise<RoyaltyEntry>;
   createRoyaltyEntries(entries: InsertRoyaltyEntry[]): Promise<RoyaltyEntry[]>;
   
   // Uploaded Files
   getUploadedFile(id: string): Promise<UploadedFile | undefined>;
-  getAllUploadedFiles(): Promise<UploadedFile[]>;
+  getAllUploadedFiles(userId: string): Promise<UploadedFile[]>;
   createUploadedFile(file: InsertUploadedFile): Promise<UploadedFile>;
   updateUploadedFileStatus(id: string, status: string, recordCount?: number, errorMessage?: string): Promise<UploadedFile | undefined>;
   
@@ -55,8 +55,8 @@ export interface IStorage {
   updateTrackIntegration(id: string, updates: Partial<InsertTrackIntegration>): Promise<TrackIntegration | undefined>;
   deleteTrackIntegration(id: string): Promise<void>;
   deleteTrackIntegrationsByProvider(trackId: string, provider: string): Promise<void>;
-  getTracksWithSpotifyStatus(): Promise<Array<Track & { spotifyMatched: boolean; spotifyId?: string; albumArt?: string }>>;
-  getTracksWithIntegrationStatus(): Promise<Array<Track & { 
+  getTracksWithSpotifyStatus(userId: string): Promise<Array<Track & { spotifyMatched: boolean; spotifyId?: string; albumArt?: string }>>;
+  getTracksWithIntegrationStatus(userId: string): Promise<Array<Track & { 
     spotifyMatched: boolean; 
     spotifyId?: string; 
     spotifyAlbumArt?: string;
@@ -71,15 +71,15 @@ export interface IStorage {
   
   // PRS Statements
   getPrsStatement(id: string): Promise<PrsStatement | undefined>;
-  getAllPrsStatements(): Promise<PrsStatement[]>;
+  getAllPrsStatements(userId: string): Promise<PrsStatement[]>;
   createPrsStatement(statement: InsertPrsStatement): Promise<PrsStatement>;
   updatePrsStatementStatus(id: string, status: string, workCount?: number, totalRoyalties?: string, errorMessage?: string): Promise<PrsStatement | undefined>;
   
   // Works
   getWork(id: string): Promise<Work | undefined>;
   getWorkByWorkNo(workNo: string): Promise<Work | undefined>;
-  getAllWorks(): Promise<Work[]>;
-  getWorksWithStats(): Promise<WorkWithStats[]>;
+  getAllWorks(userId: string): Promise<Work[]>;
+  getWorksWithStats(userId: string): Promise<WorkWithStats[]>;
   createWork(work: InsertWork): Promise<Work>;
   upsertWork(work: InsertWork): Promise<Work>;
   
@@ -87,14 +87,14 @@ export interface IStorage {
   getPerformanceRoyalty(id: string): Promise<PerformanceRoyalty | undefined>;
   getPerformanceRoyaltiesByWork(workId: string): Promise<PerformanceRoyalty[]>;
   getPerformanceRoyaltiesByStatement(statementId: string): Promise<PerformanceRoyalty[]>;
-  getAllPerformanceRoyalties(): Promise<PerformanceRoyalty[]>;
+  getAllPerformanceRoyalties(userId: string): Promise<PerformanceRoyalty[]>;
   createPerformanceRoyalty(entry: InsertPerformanceRoyalty): Promise<PerformanceRoyalty>;
   createPerformanceRoyalties(entries: InsertPerformanceRoyalty[]): Promise<PerformanceRoyalty[]>;
   
   // Social Metrics (Songstats)
   getSocialMetrics(trackId: string): Promise<SocialMetrics | undefined>;
   getSocialMetricsByIsrc(isrc: string): Promise<SocialMetrics | undefined>;
-  getAllSocialMetrics(): Promise<SocialMetrics[]>;
+  getAllSocialMetrics(userId: string): Promise<SocialMetrics[]>;
   createSocialMetrics(metrics: InsertSocialMetrics): Promise<SocialMetrics>;
   upsertSocialMetrics(metrics: InsertSocialMetrics): Promise<SocialMetrics>;
   
@@ -102,6 +102,14 @@ export interface IStorage {
   getCurrentMonthUsage(): Promise<SocialMetricsUsage | undefined>;
   incrementUsage(): Promise<SocialMetricsUsage>;
   getRemainingQuota(): Promise<number>;
+  
+  // Multi-tenancy: Claim unclaimed data for a user
+  claimUnclaimedData(userId: string): Promise<{ 
+    tracksUpdated: number; 
+    filesUpdated: number; 
+    statementsUpdated: number; 
+    worksUpdated: number;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -132,11 +140,11 @@ export class DatabaseStorage implements IStorage {
     return track || undefined;
   }
 
-  async getAllTracks(): Promise<Track[]> {
-    return await db.select().from(tracks).orderBy(desc(tracks.createdAt));
+  async getAllTracks(userId: string): Promise<Track[]> {
+    return await db.select().from(tracks).where(eq(tracks.userId, userId)).orderBy(desc(tracks.createdAt));
   }
 
-  async getTracksWithStats(): Promise<TrackWithStats[]> {
+  async getTracksWithStats(userId: string): Promise<TrackWithStats[]> {
     const result = await db.execute(sql`
       SELECT 
         t.id,
@@ -151,6 +159,7 @@ export class DatabaseStorage implements IStorage {
         COUNT(DISTINCT r.country_of_sale) as "countryCount"
       FROM tracks t
       LEFT JOIN royalty_entries r ON t.id = r.track_id
+      WHERE t.user_id = ${userId}
       GROUP BY t.id, t.isrc, t.title, t.artist, t.upc, t.created_at
       ORDER BY "totalEarnings" DESC
     `);
@@ -199,8 +208,15 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(royaltyEntries).where(eq(royaltyEntries.uploadedFileId, fileId));
   }
 
-  async getAllRoyaltyEntries(): Promise<RoyaltyEntry[]> {
-    return await db.select().from(royaltyEntries).orderBy(desc(royaltyEntries.createdAt));
+  async getAllRoyaltyEntries(userId: string): Promise<RoyaltyEntry[]> {
+    const result = await db.execute(sql`
+      SELECT r.*
+      FROM royalty_entries r
+      INNER JOIN tracks t ON r.track_id = t.id
+      WHERE t.user_id = ${userId}
+      ORDER BY r.created_at DESC
+    `);
+    return result.rows as RoyaltyEntry[];
   }
 
   async createRoyaltyEntry(entry: InsertRoyaltyEntry): Promise<RoyaltyEntry> {
@@ -220,8 +236,8 @@ export class DatabaseStorage implements IStorage {
     return file || undefined;
   }
 
-  async getAllUploadedFiles(): Promise<UploadedFile[]> {
-    return await db.select().from(uploadedFiles).orderBy(desc(uploadedFiles.uploadedAt));
+  async getAllUploadedFiles(userId: string): Promise<UploadedFile[]> {
+    return await db.select().from(uploadedFiles).where(eq(uploadedFiles.userId, userId)).orderBy(desc(uploadedFiles.uploadedAt));
   }
 
   async createUploadedFile(file: InsertUploadedFile): Promise<UploadedFile> {
@@ -314,7 +330,7 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
-  async getTracksWithSpotifyStatus(): Promise<Array<Track & { spotifyMatched: boolean; spotifyId?: string; albumArt?: string }>> {
+  async getTracksWithSpotifyStatus(userId: string): Promise<Array<Track & { spotifyMatched: boolean; spotifyId?: string; albumArt?: string }>> {
     const result = await db.execute(sql`
       SELECT 
         t.id,
@@ -328,12 +344,13 @@ export class DatabaseStorage implements IStorage {
         ti.album_art as "albumArt"
       FROM tracks t
       LEFT JOIN track_integrations ti ON t.id = ti.track_id AND ti.provider = 'spotify'
+      WHERE t.user_id = ${userId}
       ORDER BY t.created_at DESC
     `);
     return result.rows as Array<Track & { spotifyMatched: boolean; spotifyId?: string; albumArt?: string }>;
   }
 
-  async getTracksWithIntegrationStatus(): Promise<Array<Track & { 
+  async getTracksWithIntegrationStatus(userId: string): Promise<Array<Track & { 
     spotifyMatched: boolean; 
     spotifyId?: string; 
     spotifyAlbumArt?: string;
@@ -372,6 +389,7 @@ export class DatabaseStorage implements IStorage {
       FROM tracks t
       LEFT JOIN track_integrations sp ON t.id = sp.track_id AND sp.provider = 'spotify' AND (sp.is_primary = 'true' OR sp.is_primary IS NULL)
       LEFT JOIN track_integrations yt ON t.id = yt.track_id AND yt.provider = 'youtube' AND (yt.is_primary = 'true' OR yt.is_primary IS NULL)
+      WHERE t.user_id = ${userId}
       ORDER BY t.created_at DESC
     `);
     return result.rows as Array<Track & { 
@@ -394,8 +412,8 @@ export class DatabaseStorage implements IStorage {
     return statement || undefined;
   }
 
-  async getAllPrsStatements(): Promise<PrsStatement[]> {
-    return await db.select().from(prsStatements).orderBy(desc(prsStatements.uploadedAt));
+  async getAllPrsStatements(userId: string): Promise<PrsStatement[]> {
+    return await db.select().from(prsStatements).where(eq(prsStatements.userId, userId)).orderBy(desc(prsStatements.uploadedAt));
   }
 
   async createPrsStatement(statement: InsertPrsStatement): Promise<PrsStatement> {
@@ -434,11 +452,11 @@ export class DatabaseStorage implements IStorage {
     return work || undefined;
   }
 
-  async getAllWorks(): Promise<Work[]> {
-    return await db.select().from(works).orderBy(desc(works.createdAt));
+  async getAllWorks(userId: string): Promise<Work[]> {
+    return await db.select().from(works).where(eq(works.userId, userId)).orderBy(desc(works.createdAt));
   }
 
-  async getWorksWithStats(): Promise<WorkWithStats[]> {
+  async getWorksWithStats(userId: string): Promise<WorkWithStats[]> {
     const result = await db.execute(sql`
       SELECT 
         w.id,
@@ -457,6 +475,7 @@ export class DatabaseStorage implements IStorage {
         COUNT(DISTINCT pr.production) as "productionsCount"
       FROM works w
       LEFT JOIN performance_royalties pr ON w.id = pr.work_id
+      WHERE w.user_id = ${userId}
       GROUP BY w.id, w.work_no, w.title, w.ip1, w.ip2, w.ip3, w.ip4, w.your_share_percent, w.track_id, w.created_at
       ORDER BY "totalRoyalties" DESC
     `);
@@ -490,8 +509,15 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(performanceRoyalties).where(eq(performanceRoyalties.prsStatementId, statementId));
   }
 
-  async getAllPerformanceRoyalties(): Promise<PerformanceRoyalty[]> {
-    return await db.select().from(performanceRoyalties).orderBy(desc(performanceRoyalties.createdAt));
+  async getAllPerformanceRoyalties(userId: string): Promise<PerformanceRoyalty[]> {
+    const result = await db.execute(sql`
+      SELECT pr.*
+      FROM performance_royalties pr
+      INNER JOIN works w ON pr.work_id = w.id
+      WHERE w.user_id = ${userId}
+      ORDER BY pr.created_at DESC
+    `);
+    return result.rows as PerformanceRoyalty[];
   }
 
   async createPerformanceRoyalty(entry: InsertPerformanceRoyalty): Promise<PerformanceRoyalty> {
@@ -516,8 +542,15 @@ export class DatabaseStorage implements IStorage {
     return metrics || undefined;
   }
 
-  async getAllSocialMetrics(): Promise<SocialMetrics[]> {
-    return await db.select().from(socialMetrics).orderBy(desc(socialMetrics.lastUpdated));
+  async getAllSocialMetrics(userId: string): Promise<SocialMetrics[]> {
+    const result = await db.execute(sql`
+      SELECT sm.*
+      FROM social_metrics sm
+      INNER JOIN tracks t ON sm.track_id = t.id
+      WHERE t.user_id = ${userId}
+      ORDER BY sm.last_updated DESC
+    `);
+    return result.rows as SocialMetrics[];
   }
 
   async createSocialMetrics(metrics: InsertSocialMetrics): Promise<SocialMetrics> {
@@ -581,6 +614,40 @@ export class DatabaseStorage implements IStorage {
     const MONTHLY_LIMIT = 50;
     const usage = await this.getCurrentMonthUsage();
     return MONTHLY_LIMIT - (usage?.requestCount || 0);
+  }
+
+  async claimUnclaimedData(userId: string): Promise<{ 
+    tracksUpdated: number; 
+    filesUpdated: number; 
+    statementsUpdated: number; 
+    worksUpdated: number;
+  }> {
+    const tracksResult = await db.update(tracks)
+      .set({ userId })
+      .where(isNull(tracks.userId))
+      .returning();
+    
+    const filesResult = await db.update(uploadedFiles)
+      .set({ userId })
+      .where(isNull(uploadedFiles.userId))
+      .returning();
+    
+    const statementsResult = await db.update(prsStatements)
+      .set({ userId })
+      .where(isNull(prsStatements.userId))
+      .returning();
+    
+    const worksResult = await db.update(works)
+      .set({ userId })
+      .where(isNull(works.userId))
+      .returning();
+
+    return {
+      tracksUpdated: tracksResult.length,
+      filesUpdated: filesResult.length,
+      statementsUpdated: statementsResult.length,
+      worksUpdated: worksResult.length,
+    };
   }
 }
 

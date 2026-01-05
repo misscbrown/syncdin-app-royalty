@@ -43,3 +43,14 @@ The application follows a client-server architecture. The frontend is built with
 - **Spotify Web API**: Used for track metadata matching, album art, and popularity data.
 - **YouTube Data API v3**: Used for track matching, video metadata, view counts, and channel classification.
 - **Songstats API**: Used for fetching social media engagement metrics (TikTok, SoundCloud, Instagram, Snapchat).
+
+## Future Improvements (Backlog)
+1. Polish UI components with refined designs and consistent styling
+2. Enhance backend services with robust business logic
+3. Improve error handling and loading states across all pages
+4. Strengthen data validation and sanitisation throughout the app
+5. Add user feedback mechanism (e.g., feedback form or rating system)
+6. Implement dark mode toggle with theme persistence
+7. Add tooltips and explanations for complex features
+8. Add share to social media buttons
+9. Create notification system for updates and new features

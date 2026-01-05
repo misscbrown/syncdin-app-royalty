@@ -14,6 +14,7 @@ import PlaybackAnalytics from "./pages/PlaybackAnalytics";
 import ReportsExports from "./pages/ReportsExports";
 import Settings from "./pages/Settings";
 import MLCVerification from "@/pages/MLCVerification";
+import Onboarding from "@/pages/Onboarding";
 import NotFound from "@/pages/not-found";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -87,7 +88,19 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const [location, setLocation] = useLocation();
+
+  // Check if user needs onboarding
+  const needsOnboarding = isAuthenticated && user && !(user as any).onboardingCompleted;
+  const isOnOnboardingPage = location === "/onboarding";
+
+  useEffect(() => {
+    // Redirect to onboarding if needed (and not already on onboarding page)
+    if (needsOnboarding && !isOnOnboardingPage) {
+      setLocation("/onboarding");
+    }
+  }, [needsOnboarding, isOnOnboardingPage, setLocation]);
 
   if (isLoading) {
     return <LoadingScreen />;
@@ -99,6 +112,16 @@ function Router() {
       <Switch>
         <Route path="/" component={LandingPage} />
         <Route component={LandingPage} />
+      </Switch>
+    );
+  }
+
+  // Show onboarding for users who haven't completed it
+  if (needsOnboarding) {
+    return (
+      <Switch>
+        <Route path="/onboarding" component={Onboarding} />
+        <Route component={Onboarding} />
       </Switch>
     );
   }

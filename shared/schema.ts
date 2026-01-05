@@ -52,6 +52,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 // Tracks table - unique tracks by ISRC
 export const tracks = pgTable("tracks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id), // Owner of this track (nullable for unclaimed data)
   isrc: text("isrc").notNull().unique(),
   title: text("title").notNull(),
   artist: text("artist").notNull(),
@@ -137,6 +138,7 @@ export type RoyaltyEntry = typeof royaltyEntries.$inferSelect;
 // Uploaded Files table - metadata about uploaded CSV files
 export const uploadedFiles = pgTable("uploaded_files", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id), // Owner of this file (nullable for unclaimed data)
   filename: text("filename").notNull(),
   originalName: text("original_name").notNull(),
   fileType: text("file_type").notNull(), // 'distributor', 'royalty_statement', 'metadata'
@@ -246,6 +248,7 @@ export type TrackWithIntegrations = Track & {
 // PRS Statements - uploaded statement files
 export const prsStatements = pgTable("prs_statements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id), // Owner of this statement (nullable for unclaimed data)
   filename: text("filename").notNull(),
   originalName: text("original_name").notNull(),
   statementPeriod: text("statement_period"), // e.g., "2024 Q3"
@@ -273,6 +276,7 @@ export type PrsStatement = typeof prsStatements.$inferSelect;
 // Works - unique musical works (by PRS work number)
 export const works = pgTable("works", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id), // Owner of this work (nullable for unclaimed data)
   workNo: text("work_no").notNull().unique(), // PRS Work Number
   title: text("title").notNull(),
   ip1: text("ip1"), // Interested Party 1 (writer/composer)

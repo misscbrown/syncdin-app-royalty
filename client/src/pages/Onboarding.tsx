@@ -32,7 +32,7 @@ const onboardingSchema = z.object({
   role: z.enum(["Artist", "Label", "Distributor", "Manager"], {
     required_error: "Please select your role",
   }),
-  country: z.string().optional(),
+  country: z.string().min(1, "Please select your country/region"),
   acceptedTerms: z.boolean().refine((val) => val === true, {
     message: "You must accept the Terms & Conditions",
   }),
@@ -169,7 +169,7 @@ export default function Onboarding() {
                 name="country"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Country / Region (Optional)</FormLabel>
+                    <FormLabel>Country / Region *</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-country">

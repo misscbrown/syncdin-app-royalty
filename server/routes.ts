@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import { parse } from "csv-parse";
 import { Readable } from "stream";
+import { z } from "zod";
 import { storage } from "./storage";
 import type { 
   InsertTrack, InsertRoyaltyEntry, InsertTrackIntegration,
@@ -13,6 +14,21 @@ import { matchTrackOnYouTube, matchTrackOnYouTubeMulti, checkYouTubeConnection, 
 import { songstatsService } from "./services/songstatsService";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { authStorage, type OnboardingData } from "./replit_integrations/auth/storage";
+
+// Zod schema for onboarding validation
+const onboardingSchema = z.object({
+  fullName: z.string().min(2, "Name must be at least 2 characters"),
+  role: z.enum(["Artist", "Label", "Distributor", "Manager"], {
+    required_error: "Please select your role",
+  }),
+  country: z.string().min(1, "Please select your country/region"),
+  acceptedTerms: z.boolean().refine((val) => val === true, {
+    message: "You must accept the Terms & Conditions",
+  }),
+  acceptedPrivacy: z.boolean().refine((val) => val === true, {
+    message: "You must accept the Privacy Policy",
+  }),
+});
 
 // Configure multer for file uploads
 const upload = multer({
@@ -214,28 +230,22 @@ export async function registerRoutes(
   app.post('/api/onboarding', isAuthenticated, async (req, res) => {
     try {
       const userId = (req.user as any)?.claims?.sub;
-      const { fullName, role, country, acceptedTerms, acceptedPrivacy } = req.body;
       
-      // Validate required fields
-      if (!fullName || typeof fullName !== 'string' || fullName.trim().length === 0) {
-        return res.status(400).json({ error: 'Full name is required' });
+      // Validate request body with Zod
+      const parseResult = onboardingSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        const firstError = parseResult.error.errors[0];
+        return res.status(400).json({ error: firstError.message });
       }
-      if (!role || !['Artist', 'Label', 'Distributor', 'Manager'].includes(role)) {
-        return res.status(400).json({ error: 'Valid role is required (Artist, Label, Distributor, or Manager)' });
-      }
-      if (acceptedTerms !== true) {
-        return res.status(400).json({ error: 'You must accept the Terms & Conditions' });
-      }
-      if (acceptedPrivacy !== true) {
-        return res.status(400).json({ error: 'You must accept the Privacy Policy' });
-      }
+      
+      const { fullName, role, country, acceptedTerms, acceptedPrivacy } = parseResult.data;
       
       const onboardingData: OnboardingData = {
         fullName: fullName.trim(),
         role,
-        country: country || undefined,
-        acceptedTerms: true,
-        acceptedPrivacy: true,
+        country,
+        acceptedTerms,
+        acceptedPrivacy,
       };
       
       const updatedUser = await authStorage.updateOnboarding(userId, onboardingData);

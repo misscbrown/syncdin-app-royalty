@@ -92,7 +92,7 @@ function Router() {
   const [location, setLocation] = useLocation();
 
   // Check if user needs onboarding
-  const needsOnboarding = isAuthenticated && user && !(user as any).onboardingCompleted;
+  const needsOnboarding = isAuthenticated && user && !user.onboardingCompleted;
   const isOnOnboardingPage = location === "/onboarding";
 
   useEffect(() => {

@@ -1,16 +1,29 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import { parse } from "csv-parse";
 import { Readable } from "stream";
+import bcrypt from "bcrypt";
 import { storage } from "./storage";
 import type { 
   InsertTrack, InsertRoyaltyEntry, InsertTrackIntegration,
   InsertPrsStatement, InsertWork, InsertPerformanceRoyalty
 } from "@shared/schema";
+import { signupSchema, loginSchema } from "@shared/schema";
 import { matchTrack, checkSpotifyConnection, type SpotifyTrackMatch } from "./spotify";
 import { matchTrackOnYouTube, matchTrackOnYouTubeMulti, checkYouTubeConnection, ClassifiedYouTubeMatch } from "./youtube";
 import { songstatsService } from "./services/songstatsService";
+
+// Password hashing configuration
+const SALT_ROUNDS = 12;
+
+// Auth middleware
+export function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.session.userId) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  next();
+}
 
 // Configure multer for file uploads
 const upload = multer({
@@ -202,6 +215,120 @@ export async function registerRoutes(
   // Health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // ============================================
+  // AUTH ROUTES
+  // ============================================
+  
+  // Signup
+  app.post('/api/auth/signup', async (req, res) => {
+    try {
+      const result = signupSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: result.error.errors[0].message });
+      }
+      
+      const { email, password } = result.data;
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ message: "An account with this email already exists" });
+      }
+      
+      // Hash password
+      const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+      
+      // Create user
+      const user = await storage.createUser({ email, passwordHash });
+      
+      // Set session
+      req.session.userId = user.id;
+      
+      // Return user without passwordHash
+      res.status(201).json({ 
+        id: user.id, 
+        email: user.email, 
+        createdAt: user.createdAt 
+      });
+    } catch (error) {
+      console.error('Signup error:', error);
+      res.status(500).json({ message: "Failed to create account" });
+    }
+  });
+  
+  // Login
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const result = loginSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: result.error.errors[0].message });
+      }
+      
+      const { email, password } = result.data;
+      
+      // Find user
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+      
+      // Compare password
+      const isValid = await bcrypt.compare(password, user.passwordHash);
+      if (!isValid) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+      
+      // Set session
+      req.session.userId = user.id;
+      
+      // Return user without passwordHash
+      res.json({ 
+        id: user.id, 
+        email: user.email, 
+        createdAt: user.createdAt 
+      });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({ message: "Failed to log in" });
+    }
+  });
+  
+  // Logout
+  app.post('/api/auth/logout', (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Logout error:', err);
+        return res.status(500).json({ message: "Failed to log out" });
+      }
+      res.clearCookie('connect.sid');
+      res.json({ message: "Logged out successfully" });
+    });
+  });
+  
+  // Get current user
+  app.get('/api/auth/me', async (req, res) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        req.session.destroy(() => {});
+        return res.status(401).json({ message: "User not found" });
+      }
+      
+      res.json({ 
+        id: user.id, 
+        email: user.email, 
+        createdAt: user.createdAt 
+      });
+    } catch (error) {
+      console.error('Get user error:', error);
+      res.status(500).json({ message: "Failed to get user" });
+    }
   });
 
   // Upload CSV file

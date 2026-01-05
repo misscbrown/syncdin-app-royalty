@@ -3,27 +3,15 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import { parse } from "csv-parse";
 import { Readable } from "stream";
-import bcrypt from "bcrypt";
 import { storage } from "./storage";
 import type { 
   InsertTrack, InsertRoyaltyEntry, InsertTrackIntegration,
   InsertPrsStatement, InsertWork, InsertPerformanceRoyalty
 } from "@shared/schema";
-import { signupSchema, loginSchema } from "@shared/schema";
 import { matchTrack, checkSpotifyConnection, type SpotifyTrackMatch } from "./spotify";
 import { matchTrackOnYouTube, matchTrackOnYouTubeMulti, checkYouTubeConnection, ClassifiedYouTubeMatch } from "./youtube";
 import { songstatsService } from "./services/songstatsService";
-
-// Password hashing configuration
-const SALT_ROUNDS = 12;
-
-// Auth middleware
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (!req.session.userId) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-  next();
-}
+import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -212,129 +200,19 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
+  // Setup Replit Auth
+  await setupAuth(app);
+  registerAuthRoutes(app);
+  
   // Health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // ============================================
-  // AUTH ROUTES
-  // ============================================
-  
-  // Signup
-  app.post('/api/auth/signup', async (req, res) => {
-    try {
-      const result = signupSchema.safeParse(req.body);
-      if (!result.success) {
-        return res.status(400).json({ message: result.error.errors[0].message });
-      }
-      
-      const { email, password } = result.data;
-      
-      // Check if user already exists
-      const existingUser = await storage.getUserByEmail(email);
-      if (existingUser) {
-        return res.status(400).json({ message: "An account with this email already exists" });
-      }
-      
-      // Hash password
-      const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-      
-      // Create user
-      const user = await storage.createUser({ email, passwordHash });
-      
-      // Set session
-      req.session.userId = user.id;
-      
-      // Return user without passwordHash
-      res.status(201).json({ 
-        id: user.id, 
-        email: user.email, 
-        createdAt: user.createdAt 
-      });
-    } catch (error) {
-      console.error('Signup error:', error);
-      res.status(500).json({ message: "Failed to create account" });
-    }
-  });
-  
-  // Login
-  app.post('/api/auth/login', async (req, res) => {
-    try {
-      const result = loginSchema.safeParse(req.body);
-      if (!result.success) {
-        return res.status(400).json({ message: result.error.errors[0].message });
-      }
-      
-      const { email, password } = result.data;
-      
-      // Find user
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
-      
-      // Compare password
-      const isValid = await bcrypt.compare(password, user.passwordHash);
-      if (!isValid) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
-      
-      // Set session
-      req.session.userId = user.id;
-      
-      // Return user without passwordHash
-      res.json({ 
-        id: user.id, 
-        email: user.email, 
-        createdAt: user.createdAt 
-      });
-    } catch (error) {
-      console.error('Login error:', error);
-      res.status(500).json({ message: "Failed to log in" });
-    }
-  });
-  
-  // Logout
-  app.post('/api/auth/logout', (req, res) => {
-    req.session.destroy((err) => {
-      if (err) {
-        console.error('Logout error:', err);
-        return res.status(500).json({ message: "Failed to log out" });
-      }
-      res.clearCookie('connect.sid');
-      res.json({ message: "Logged out successfully" });
-    });
-  });
-  
-  // Get current user
-  app.get('/api/auth/me', async (req, res) => {
-    if (!req.session.userId) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
-    
-    try {
-      const user = await storage.getUser(req.session.userId);
-      if (!user) {
-        req.session.destroy(() => {});
-        return res.status(401).json({ message: "User not found" });
-      }
-      
-      res.json({ 
-        id: user.id, 
-        email: user.email, 
-        createdAt: user.createdAt 
-      });
-    } catch (error) {
-      console.error('Get user error:', error);
-      res.status(500).json({ message: "Failed to get user" });
-    }
-  });
-  
   // Claim unclaimed data (for first-time users to claim existing data)
-  app.post('/api/claim-data', requireAuth, async (req, res) => {
+  app.post('/api/claim-data', isAuthenticated, async (req, res) => {
     try {
-      const result = await storage.claimUnclaimedData(req.session.userId!);
+      const result = await storage.claimUnclaimedData((req.user as any)?.claims?.sub);
       res.json({
         message: "Data claimed successfully",
         ...result
@@ -346,14 +224,14 @@ export async function registerRoutes(
   });
 
   // Upload CSV file
-  app.post('/api/upload', requireAuth, upload.single('file'), async (req, res) => {
+  app.post('/api/upload', isAuthenticated, upload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
       const fileType = req.body.fileType || 'distributor';
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       
       // Create file record with user ownership
       const uploadedFile = await storage.createUploadedFile({
@@ -519,9 +397,9 @@ export async function registerRoutes(
   });
 
   // Get all uploaded files
-  app.get('/api/files', requireAuth, async (req, res) => {
+  app.get('/api/files', isAuthenticated, async (req, res) => {
     try {
-      const files = await storage.getAllUploadedFiles(req.session.userId!);
+      const files = await storage.getAllUploadedFiles((req.user as any)?.claims?.sub);
       res.json(files);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -529,9 +407,9 @@ export async function registerRoutes(
   });
 
   // Get all tracks with stats
-  app.get('/api/tracks', requireAuth, async (req, res) => {
+  app.get('/api/tracks', isAuthenticated, async (req, res) => {
     try {
-      const tracks = await storage.getTracksWithStats(req.session.userId!);
+      const tracks = await storage.getTracksWithStats((req.user as any)?.claims?.sub);
       res.json(tracks);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -539,9 +417,9 @@ export async function registerRoutes(
   });
 
   // Get single track
-  app.get('/api/tracks/:id', requireAuth, async (req, res) => {
+  app.get('/api/tracks/:id', isAuthenticated, async (req, res) => {
     try {
-      const track = await storage.getTrack(req.params.id, req.session.userId!);
+      const track = await storage.getTrack(req.params.id, (req.user as any)?.claims?.sub);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
       }
@@ -552,9 +430,9 @@ export async function registerRoutes(
   });
 
   // Get royalty entries for a track
-  app.get('/api/tracks/:id/royalties', requireAuth, async (req, res) => {
+  app.get('/api/tracks/:id/royalties', isAuthenticated, async (req, res) => {
     try {
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       const track = await storage.getTrack(req.params.id, userId);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
@@ -567,11 +445,11 @@ export async function registerRoutes(
   });
 
   // Update MLC status for a track (manual check)
-  app.patch('/api/tracks/:id/mlc-status', requireAuth, async (req, res) => {
+  app.patch('/api/tracks/:id/mlc-status', isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
       const { mlcStatus, mlcNotes } = req.body;
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       
       const track = await storage.getTrack(id, userId);
       if (!track) {
@@ -591,9 +469,9 @@ export async function registerRoutes(
   });
 
   // Get all royalty entries
-  app.get('/api/royalties', requireAuth, async (req, res) => {
+  app.get('/api/royalties', isAuthenticated, async (req, res) => {
     try {
-      const entries = await storage.getAllRoyaltyEntries(req.session.userId!);
+      const entries = await storage.getAllRoyaltyEntries((req.user as any)?.claims?.sub);
       res.json(entries);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -615,9 +493,9 @@ export async function registerRoutes(
   });
 
   // Get tracks with Spotify match status
-  app.get('/api/spotify/tracks', requireAuth, async (req, res) => {
+  app.get('/api/spotify/tracks', isAuthenticated, async (req, res) => {
     try {
-      const tracks = await storage.getTracksWithSpotifyStatus(req.session.userId!);
+      const tracks = await storage.getTracksWithSpotifyStatus((req.user as any)?.claims?.sub);
       res.json(tracks);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -625,10 +503,10 @@ export async function registerRoutes(
   });
 
   // Match a single track with Spotify
-  app.post('/api/spotify/match/:trackId', requireAuth, async (req, res) => {
+  app.post('/api/spotify/match/:trackId', isAuthenticated, async (req, res) => {
     try {
       const { trackId } = req.params;
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       
       // Get the track
       const track = await storage.getTrack(trackId, userId);
@@ -687,10 +565,10 @@ export async function registerRoutes(
   });
 
   // Batch match multiple tracks with Spotify
-  app.post('/api/spotify/match-batch', requireAuth, async (req, res) => {
+  app.post('/api/spotify/match-batch', isAuthenticated, async (req, res) => {
     try {
       const { trackIds } = req.body;
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       
       if (!Array.isArray(trackIds) || trackIds.length === 0) {
         return res.status(400).json({ error: 'trackIds array is required' });
@@ -775,9 +653,9 @@ export async function registerRoutes(
   });
 
   // Get Spotify integration for a track
-  app.get('/api/tracks/:id/spotify', requireAuth, async (req, res) => {
+  app.get('/api/tracks/:id/spotify', isAuthenticated, async (req, res) => {
     try {
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       const track = await storage.getTrack(req.params.id, userId);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
@@ -793,9 +671,9 @@ export async function registerRoutes(
   });
 
   // Delete a Spotify match (for re-matching)
-  app.delete('/api/tracks/:id/spotify', requireAuth, async (req, res) => {
+  app.delete('/api/tracks/:id/spotify', isAuthenticated, async (req, res) => {
     try {
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       const track = await storage.getTrack(req.params.id, userId);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
@@ -812,10 +690,10 @@ export async function registerRoutes(
   });
 
   // Re-match a track with Spotify (delete existing + match again)
-  app.post('/api/spotify/rematch/:trackId', requireAuth, async (req, res) => {
+  app.post('/api/spotify/rematch/:trackId', isAuthenticated, async (req, res) => {
     try {
       const { trackId } = req.params;
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       
       const track = await storage.getTrack(trackId, userId);
       if (!track) {
@@ -875,10 +753,10 @@ export async function registerRoutes(
   });
 
   // Batch re-match multiple tracks with Spotify
-  app.post('/api/spotify/rematch-batch', requireAuth, async (req, res) => {
+  app.post('/api/spotify/rematch-batch', isAuthenticated, async (req, res) => {
     try {
       const { trackIds } = req.body;
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       
       if (!Array.isArray(trackIds) || trackIds.length === 0) {
         return res.status(400).json({ error: 'trackIds array is required' });
@@ -964,9 +842,9 @@ export async function registerRoutes(
   });
 
   // Get tracks with all integration statuses (Spotify + YouTube)
-  app.get('/api/integrations/tracks', requireAuth, async (req, res) => {
+  app.get('/api/integrations/tracks', isAuthenticated, async (req, res) => {
     try {
-      const tracks = await storage.getTracksWithIntegrationStatus(req.session.userId!);
+      const tracks = await storage.getTracksWithIntegrationStatus((req.user as any)?.claims?.sub);
       res.json(tracks);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -974,10 +852,10 @@ export async function registerRoutes(
   });
 
   // Match a single track with YouTube (stores all valid matches with isPrimary flag)
-  app.post('/api/youtube/match/:trackId', requireAuth, async (req, res) => {
+  app.post('/api/youtube/match/:trackId', isAuthenticated, async (req, res) => {
     try {
       const { trackId } = req.params;
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       
       // Get the track
       const track = await storage.getTrack(trackId, userId);
@@ -1052,10 +930,10 @@ export async function registerRoutes(
   });
 
   // Batch match multiple tracks with YouTube (stores all valid matches per track)
-  app.post('/api/youtube/match-batch', requireAuth, async (req, res) => {
+  app.post('/api/youtube/match-batch', isAuthenticated, async (req, res) => {
     try {
       const { trackIds } = req.body;
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       
       if (!Array.isArray(trackIds) || trackIds.length === 0) {
         return res.status(400).json({ error: 'trackIds array is required' });
@@ -1163,9 +1041,9 @@ export async function registerRoutes(
   });
 
   // Get YouTube integration for a track (returns primary + all matches info)
-  app.get('/api/tracks/:id/youtube', requireAuth, async (req, res) => {
+  app.get('/api/tracks/:id/youtube', isAuthenticated, async (req, res) => {
     try {
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       const track = await storage.getTrack(req.params.id, userId);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
@@ -1187,15 +1065,15 @@ export async function registerRoutes(
   });
 
   // Get all potential YouTube matches for a track (multi-match with classification)
-  app.get('/api/tracks/:id/youtube/matches', requireAuth, async (req, res) => {
+  app.get('/api/tracks/:id/youtube/matches', isAuthenticated, async (req, res) => {
     try {
-      const track = await storage.getTrack(req.params.id, req.session.userId!);
+      const track = await storage.getTrack(req.params.id, (req.user as any)?.claims?.sub);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
       }
       
       // Get Spotify match for duration cross-reference
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       const spotifyMatch = await storage.getTrackIntegration(req.params.id, 'spotify', userId);
       const spotifyDurationMs = spotifyMatch?.durationMs || null;
       
@@ -1236,7 +1114,7 @@ export async function registerRoutes(
   });
   
   // Store a specific YouTube match for a track
-  app.post('/api/tracks/:id/youtube/matches', requireAuth, async (req, res) => {
+  app.post('/api/tracks/:id/youtube/matches', isAuthenticated, async (req, res) => {
     try {
       const matchData = req.body;
       
@@ -1244,7 +1122,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: 'videoId is required' });
       }
       
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       const track = await storage.getTrack(req.params.id, userId);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
@@ -1288,9 +1166,9 @@ export async function registerRoutes(
   });
 
   // Delete all YouTube matches for a track (for re-matching)
-  app.delete('/api/tracks/:id/youtube', requireAuth, async (req, res) => {
+  app.delete('/api/tracks/:id/youtube', isAuthenticated, async (req, res) => {
     try {
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       const track = await storage.getTrack(req.params.id, userId);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
@@ -1307,10 +1185,10 @@ export async function registerRoutes(
   });
 
   // Re-match a track with YouTube (delete all existing + store all new matches with classification)
-  app.post('/api/youtube/rematch/:trackId', requireAuth, async (req, res) => {
+  app.post('/api/youtube/rematch/:trackId', isAuthenticated, async (req, res) => {
     try {
       const { trackId } = req.params;
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       
       const track = await storage.getTrack(trackId, userId);
       if (!track) {
@@ -1378,10 +1256,10 @@ export async function registerRoutes(
   });
 
   // Batch re-match multiple tracks with YouTube (stores all matches with classification)
-  app.post('/api/youtube/rematch-batch', requireAuth, async (req, res) => {
+  app.post('/api/youtube/rematch-batch', isAuthenticated, async (req, res) => {
     try {
       const { trackIds } = req.body;
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       
       if (!Array.isArray(trackIds) || trackIds.length === 0) {
         return res.status(400).json({ error: 'trackIds array is required' });
@@ -1471,9 +1349,9 @@ export async function registerRoutes(
   });
 
   // Get all integrations for a track (Spotify + YouTube)
-  app.get('/api/tracks/:id/integrations', requireAuth, async (req, res) => {
+  app.get('/api/tracks/:id/integrations', isAuthenticated, async (req, res) => {
     try {
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       const track = await storage.getTrack(req.params.id, userId);
       if (!track) {
         return res.status(404).json({ error: 'Track not found' });
@@ -1490,9 +1368,9 @@ export async function registerRoutes(
   // ============================================
 
   // Get all PRS statements
-  app.get('/api/prs-statements', requireAuth, async (req, res) => {
+  app.get('/api/prs-statements', isAuthenticated, async (req, res) => {
     try {
-      const statements = await storage.getAllPrsStatements(req.session.userId!);
+      const statements = await storage.getAllPrsStatements((req.user as any)?.claims?.sub);
       res.json(statements);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1500,9 +1378,9 @@ export async function registerRoutes(
   });
 
   // Get single PRS statement with summary
-  app.get('/api/prs-statements/:id', requireAuth, async (req, res) => {
+  app.get('/api/prs-statements/:id', isAuthenticated, async (req, res) => {
     try {
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       const statement = await storage.getPrsStatement(req.params.id, userId);
       if (!statement) {
         return res.status(404).json({ error: 'Statement not found' });
@@ -1515,14 +1393,14 @@ export async function registerRoutes(
   });
 
   // Upload PRS statement CSV
-  app.post('/api/prs-statements/upload', requireAuth, upload.single('file'), async (req, res) => {
+  app.post('/api/prs-statements/upload', isAuthenticated, upload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
       const { statementPeriod } = req.body;
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
 
       // Create statement record with user ownership
       const statement = await storage.createPrsStatement({
@@ -1693,9 +1571,9 @@ export async function registerRoutes(
   });
 
   // Get all works with stats
-  app.get('/api/works', requireAuth, async (req, res) => {
+  app.get('/api/works', isAuthenticated, async (req, res) => {
     try {
-      const works = await storage.getWorksWithStats(req.session.userId!);
+      const works = await storage.getWorksWithStats((req.user as any)?.claims?.sub);
       res.json(works);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1703,9 +1581,9 @@ export async function registerRoutes(
   });
 
   // Get single work with performance royalties
-  app.get('/api/works/:id', requireAuth, async (req, res) => {
+  app.get('/api/works/:id', isAuthenticated, async (req, res) => {
     try {
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       const work = await storage.getWork(req.params.id, userId);
       if (!work) {
         return res.status(404).json({ error: 'Work not found' });
@@ -1718,9 +1596,9 @@ export async function registerRoutes(
   });
 
   // Get all performance royalties
-  app.get('/api/performance-royalties', requireAuth, async (req, res) => {
+  app.get('/api/performance-royalties', isAuthenticated, async (req, res) => {
     try {
-      const royalties = await storage.getAllPerformanceRoyalties(req.session.userId!);
+      const royalties = await storage.getAllPerformanceRoyalties((req.user as any)?.claims?.sub);
       res.json(royalties);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1728,11 +1606,11 @@ export async function registerRoutes(
   });
 
   // Get performance royalties summary (for dashboard)
-  app.get('/api/performance-royalties/summary', requireAuth, async (req, res) => {
+  app.get('/api/performance-royalties/summary', isAuthenticated, async (req, res) => {
     try {
-      const statements = await storage.getAllPrsStatements(req.session.userId!);
-      const works = await storage.getWorksWithStats(req.session.userId!);
-      const allRoyalties = await storage.getAllPerformanceRoyalties(req.session.userId!);
+      const statements = await storage.getAllPrsStatements((req.user as any)?.claims?.sub);
+      const works = await storage.getWorksWithStats((req.user as any)?.claims?.sub);
+      const allRoyalties = await storage.getAllPerformanceRoyalties((req.user as any)?.claims?.sub);
 
       const totalRoyalties = works.reduce((sum, w) => sum + parseFloat(w.totalRoyalties || '0'), 0);
       const totalPerformances = works.reduce((sum, w) => sum + (w.totalPerformances || 0), 0);
@@ -1762,14 +1640,14 @@ export async function registerRoutes(
   });
 
   // Dashboard API - aggregates all metrics from real data
-  app.get('/api/dashboard', requireAuth, async (req, res) => {
+  app.get('/api/dashboard', isAuthenticated, async (req, res) => {
     try {
       // Get all data sources
-      const tracks = await storage.getTracksWithStats(req.session.userId!);
-      const allIntegrations = await storage.getAllTrackIntegrations(req.session.userId!);
-      const royaltyEntries = await storage.getAllRoyaltyEntries(req.session.userId!);
-      const prsStatements = await storage.getAllPrsStatements(req.session.userId!);
-      const works = await storage.getWorksWithStats(req.session.userId!);
+      const tracks = await storage.getTracksWithStats((req.user as any)?.claims?.sub);
+      const allIntegrations = await storage.getAllTrackIntegrations((req.user as any)?.claims?.sub);
+      const royaltyEntries = await storage.getAllRoyaltyEntries((req.user as any)?.claims?.sub);
+      const prsStatements = await storage.getAllPrsStatements((req.user as any)?.claims?.sub);
+      const works = await storage.getWorksWithStats((req.user as any)?.claims?.sub);
 
       // Helper for safe number parsing
       const safeNumber = (val: any): number => {
@@ -1907,9 +1785,9 @@ export async function registerRoutes(
   });
 
   // Get all social metrics
-  app.get("/api/social-metrics", requireAuth, async (req, res) => {
+  app.get("/api/social-metrics", isAuthenticated, async (req, res) => {
     try {
-      const metrics = await storage.getAllSocialMetrics(req.session.userId!);
+      const metrics = await storage.getAllSocialMetrics((req.user as any)?.claims?.sub);
       const quota = await songstatsService.checkQuota();
       res.json({
         metrics,
@@ -1922,10 +1800,10 @@ export async function registerRoutes(
   });
 
   // Get social metrics for a specific track
-  app.get("/api/social-metrics/:trackId", requireAuth, async (req, res) => {
+  app.get("/api/social-metrics/:trackId", isAuthenticated, async (req, res) => {
     try {
       const { trackId } = req.params;
-      const userId = req.session.userId!;
+      const userId = (req.user as any)?.claims?.sub;
       const track = await storage.getTrack(trackId, userId);
       if (!track) {
         return res.status(404).json({ error: "Track not found" });
@@ -2010,7 +1888,7 @@ export async function registerRoutes(
   });
 
   // Refresh all tracks that don't have social metrics yet
-  app.post("/api/social-metrics/refresh-all", requireAuth, async (req, res) => {
+  app.post("/api/social-metrics/refresh-all", isAuthenticated, async (req, res) => {
     try {
       if (!songstatsService.isConfigured()) {
         return res.status(503).json({ error: "Songstats API not configured" });
@@ -2025,8 +1903,8 @@ export async function registerRoutes(
         });
       }
 
-      const allTracks = await storage.getAllTracks(req.session.userId!);
-      const existingMetrics = await storage.getAllSocialMetrics(req.session.userId!);
+      const allTracks = await storage.getAllTracks((req.user as any)?.claims?.sub);
+      const existingMetrics = await storage.getAllSocialMetrics((req.user as any)?.claims?.sub);
       const existingTrackIds = new Set(existingMetrics.map(m => m.trackId));
       
       const tracksWithoutMetrics = allTracks.filter(t => !existingTrackIds.has(t.id));

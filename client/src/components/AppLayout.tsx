@@ -75,14 +75,22 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <div className="p-4 border-t border-border space-y-3">
           {user && (
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                <span className="text-sm font-medium text-primary">
-                  {user.email.charAt(0).toUpperCase()}
-                </span>
-              </div>
+              {(user as any).profileImageUrl ? (
+                <img 
+                  src={(user as any).profileImageUrl} 
+                  alt="Profile" 
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                  <span className="text-sm font-medium text-primary">
+                    {((user as any).firstName || user.email || 'U').charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate" data-testid="text-user-email">
-                  {user.email}
+                  {(user as any).firstName ? `${(user as any).firstName} ${(user as any).lastName || ''}`.trim() : user.email || 'User'}
                 </p>
               </div>
             </div>

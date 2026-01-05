@@ -1,6 +1,4 @@
 import express, { type Request, Response, NextFunction } from "express";
-import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -14,12 +12,6 @@ declare module "http" {
   }
 }
 
-declare module "express-session" {
-  interface SessionData {
-    userId: string;
-  }
-}
-
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -30,25 +22,7 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
-// Session configuration
-const PgSession = connectPgSimple(session);
-app.use(
-  session({
-    store: new PgSession({
-      conString: process.env.DATABASE_URL,
-      createTableIfMissing: true,
-    }),
-    secret: process.env.SESSION_SECRET || "dev-secret-change-in-production",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === "production",
-      httpOnly: true,
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-    },
-  })
-);
+// Note: Session configuration is handled by Replit Auth (setupAuth in routes.ts)
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {

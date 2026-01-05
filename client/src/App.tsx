@@ -1,13 +1,10 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider } from "@/hooks/use-auth";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useAuth } from "@/hooks/use-auth";
 import './styles/theme.css';
-import Login from "@/pages/Login";
-import Signup from "@/pages/Signup";
 import Dashboard from "@/pages/Dashboard";
 import UploadTracks from "@/pages/UploadTracks"
 import TrackLibrary from "@/pages/TrackLibrary";
@@ -18,12 +15,84 @@ import ReportsExports from "./pages/ReportsExports";
 import Settings from "./pages/Settings";
 import MLCVerification from "@/pages/MLCVerification";
 import NotFound from "@/pages/not-found";
+import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Loader2, Music } from "lucide-react";
+
+// Landing page for logged out users
+function LandingPage() {
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-8">
+      <div className="max-w-md text-center space-y-6">
+        <div className="flex items-center justify-center gap-3 mb-4">
+          <Music className="w-12 h-12 text-primary" />
+          <h1 className="text-4xl font-bold">RoyaltyTrack</h1>
+        </div>
+        <p className="text-lg text-muted-foreground">
+          Track your music royalties, manage your catalog, and gain insights into your earnings across all platforms.
+        </p>
+        <Button 
+          size="lg" 
+          onClick={() => window.location.href = "/api/login"}
+          data-testid="button-login"
+        >
+          Sign In with Replit
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Loading screen
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    </div>
+  );
+}
+
+// Protected route wrapper - redirects to login if not authenticated
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      window.location.href = "/api/login";
+    }
+  }, [isLoading, isAuthenticated, setLocation]);
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
+  if (!isAuthenticated) {
+    return <LoadingScreen />;
+  }
+
+  return <>{children}</>;
+}
 
 function Router() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
+  // Show landing page for logged out users at root
+  if (!isAuthenticated) {
+    return (
+      <Switch>
+        <Route path="/" component={LandingPage} />
+        <Route component={LandingPage} />
+      </Switch>
+    );
+  }
+
   return (
     <Switch>
-      <Route path="/login" component={Login} />
-      <Route path="/signup" component={Signup} />
       <Route path="/">
         <ProtectedRoute>
           <Dashboard />
@@ -78,10 +147,8 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <AuthProvider>
-          <Router />
-          <Toaster />
-        </AuthProvider>
+        <Router />
+        <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
   );

@@ -9,8 +9,11 @@ import {
   Settings,
   Music,
   Library,
-  FileCheck
+  FileCheck,
+  LogOut
 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { Button } from "@/components/ui/button";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -30,6 +33,7 @@ const sidebarItems = [
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const [location] = useLocation();
+  const { user, logout } = useAuth();
 
   return (
     <div className="flex h-screen bg-background" data-testid="app-layout">
@@ -68,7 +72,31 @@ export default function AppLayout({ children }: AppLayoutProps) {
           </ul>
         </nav>
 
-        <div className="p-4 border-t border-border">
+        <div className="p-4 border-t border-border space-y-3">
+          {user && (
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                <span className="text-sm font-medium text-primary">
+                  {user.email.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate" data-testid="text-user-email">
+                  {user.email}
+                </p>
+              </div>
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+            onClick={logout}
+            data-testid="button-logout"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign out
+          </Button>
           <p className="text-xs text-muted-foreground">v1.0.0</p>
         </div>
       </aside>

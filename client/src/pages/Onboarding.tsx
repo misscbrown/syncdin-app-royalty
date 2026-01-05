@@ -85,8 +85,8 @@ export default function Onboarding() {
       const response = await apiRequest("POST", "/api/onboarding", data);
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
       toast({
         title: "Welcome to RoyaltyTrack!",
         description: "Your profile has been set up successfully.",

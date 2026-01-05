@@ -31,36 +31,51 @@ class AuthStorage implements IAuthStorage {
       if (existingUserByEmail) {
         console.log(`Migrating user data from ${existingUserByEmail.id} to ${userData.id}`);
         
-        // Migrate all data from old user to new user
-        await db.transaction(async (tx) => {
-          // Update tracks
+        // Migrate all data from old user to new user in a single transaction
+        // Order: 1) Insert new user, 2) Migrate related records, 3) Delete old user
+        const [migratedUser] = await db.transaction(async (tx) => {
+          // First, insert the new user (so FK constraints are satisfied)
+          const [newUser] = await tx
+            .insert(users)
+            .values(userData)
+            .onConflictDoUpdate({
+              target: users.id,
+              set: {
+                ...userData,
+                updatedAt: new Date(),
+              },
+            })
+            .returning();
+          
+          // Now migrate all related records to the new user ID
           await tx.update(tracks)
             .set({ userId: userData.id })
             .where(eq(tracks.userId, existingUserByEmail.id));
           
-          // Update uploaded files
           await tx.update(uploadedFiles)
             .set({ userId: userData.id })
             .where(eq(uploadedFiles.userId, existingUserByEmail.id));
           
-          // Update PRS statements
           await tx.update(prsStatements)
             .set({ userId: userData.id })
             .where(eq(prsStatements.userId, existingUserByEmail.id));
           
-          // Update works
           await tx.update(works)
             .set({ userId: userData.id })
             .where(eq(works.userId, existingUserByEmail.id));
           
-          // Delete the old user record
+          // Finally, delete the old user record
           await tx.delete(users).where(eq(users.id, existingUserByEmail.id));
+          
+          return [newUser];
         });
         
         console.log(`User data migration complete for ${userData.email}`);
+        return migratedUser;
       }
     }
 
+    // Standard upsert when no migration is needed
     const [user] = await db
       .insert(users)
       .values(userData)

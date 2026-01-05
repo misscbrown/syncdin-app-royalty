@@ -10,14 +10,19 @@ A full-stack music royalty tracking application with React + Vite + TailwindCSS 
 │   └── src/
 │       ├── components/       # Reusable components (AppLayout, UI components)
 │       ├── pages/            # Page components
-│       │   ├── Dashboard.tsx      # Main dashboard
+│       │   ├── Login.tsx          # Login page
+│       │   ├── Signup.tsx         # Signup page
+│       │   ├── Dashboard.tsx      # Main dashboard (protected)
 │       │   ├── UploadTracks.tsx   # CSV file upload
 │       │   ├── TrackLibrary.tsx   # Track listing with stats
 │       │   ├── MetadataMatching.tsx  # Spotify matching & metadata health
 │       │   ├── RoyaltyStatements.tsx # PRS statements & performance royalties
 │       │   ├── PlaybackAnalytics.tsx
 │       │   ├── ReportsExports.tsx
+│       │   ├── MLCVerification.tsx   # MLC status tracking
 │       │   └── Settings.tsx
+│       ├── hooks/            # Custom React hooks
+│       │   └── use-auth.tsx      # Auth context & hooks
 │       ├── lib/              # Utilities (queryClient)
 │       └── styles/           # Theme CSS
 │
@@ -37,6 +42,9 @@ A full-stack music royalty tracking application with React + Vite + TailwindCSS 
 ## Database Schema
 
 ### Tables
+- **users** - User accounts for authentication
+  - id (UUID), email (unique), passwordHash (bcrypt hashed), createdAt
+
 - **tracks** - Unique tracks identified by ISRC
   - id, isrc (unique), title, artist, upc, createdAt
   - MLC verification fields:
@@ -77,6 +85,12 @@ A full-stack music royalty tracking application with React + Vite + TailwindCSS 
   - period, durationSeconds, production, performances, royaltyAmount, currency
 
 ## API Endpoints
+
+### Authentication
+- `POST /api/auth/signup` - Create new user account (email, password)
+- `POST /api/auth/login` - Login with email/password, sets session cookie
+- `POST /api/auth/logout` - Logout and destroy session
+- `GET /api/auth/me` - Get current authenticated user
 
 ### File Upload
 - `POST /api/upload` - Upload and parse CSV file (multipart/form-data)

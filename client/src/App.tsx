@@ -31,13 +31,25 @@ function LandingPage() {
         <p className="text-lg text-muted-foreground">
           Track your music royalties, manage your catalog, and gain insights into your earnings across all platforms.
         </p>
-        <Button 
-          size="lg" 
-          onClick={() => window.location.href = "/api/login"}
-          data-testid="button-login"
-        >
-          Sign In with Replit
-        </Button>
+        <div className="flex flex-col gap-3">
+          <Button 
+            size="lg" 
+            onClick={() => window.location.href = "/api/login"}
+            data-testid="button-signup"
+          >
+            Sign Up
+          </Button>
+          <p className="text-sm text-muted-foreground">
+            Already have an account?{" "}
+            <button
+              onClick={() => window.location.href = "/api/login"}
+              className="text-foreground hover:underline font-medium"
+              data-testid="link-signin"
+            >
+              Sign In
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, jsonb, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, index, jsonb, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
 
 // Session storage table.
 // (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
@@ -28,6 +28,13 @@ export const users = pgTable("users", {
   externalAuthProvider: varchar("external_auth_provider").default("replit"),
   // Legacy: nullable for migration from custom auth (can be removed later)
   passwordHash: varchar("password_hash"),
+  // Onboarding fields
+  fullName: varchar("full_name"),
+  role: varchar("role"), // Artist, Label, Distributor, Manager
+  country: varchar("country"),
+  acceptedTerms: boolean("accepted_terms").default(false),
+  acceptedPrivacy: boolean("accepted_privacy").default(false),
+  onboardingCompleted: boolean("onboarding_completed").default(false),
 });
 
 export type UpsertUser = typeof users.$inferInsert;

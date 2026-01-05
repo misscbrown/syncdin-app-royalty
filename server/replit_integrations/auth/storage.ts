@@ -3,11 +3,21 @@ import { tracks, uploadedFiles, prsStatements, works } from "@shared/schema";
 import { db } from "../../db";
 import { eq, and, ne } from "drizzle-orm";
 
+// Onboarding data structure
+export interface OnboardingData {
+  fullName: string;
+  role: string;
+  country?: string;
+  acceptedTerms: boolean;
+  acceptedPrivacy: boolean;
+}
+
 // Interface for auth storage operations
 // (IMPORTANT) These user operations are mandatory for Replit Auth.
 export interface IAuthStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  updateOnboarding(userId: string, data: OnboardingData): Promise<User>;
 }
 
 class AuthStorage implements IAuthStorage {
@@ -86,6 +96,23 @@ class AuthStorage implements IAuthStorage {
           updatedAt: new Date(),
         },
       })
+      .returning();
+    return user;
+  }
+
+  async updateOnboarding(userId: string, data: OnboardingData): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        fullName: data.fullName,
+        role: data.role,
+        country: data.country || null,
+        acceptedTerms: data.acceptedTerms,
+        acceptedPrivacy: data.acceptedPrivacy,
+        onboardingCompleted: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
       .returning();
     return user;
   }

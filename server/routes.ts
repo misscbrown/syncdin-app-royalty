@@ -12,6 +12,7 @@ import { matchTrack, checkSpotifyConnection, type SpotifyTrackMatch } from "./sp
 import { matchTrackOnYouTube, matchTrackOnYouTubeMulti, checkYouTubeConnection, ClassifiedYouTubeMatch } from "./youtube";
 import { songstatsService } from "./services/songstatsService";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
+import { authStorage, type OnboardingData } from "./replit_integrations/auth/storage";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -207,6 +208,42 @@ export async function registerRoutes(
   // Health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // Complete user onboarding
+  app.post('/api/onboarding', isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any)?.claims?.sub;
+      const { fullName, role, country, acceptedTerms, acceptedPrivacy } = req.body;
+      
+      // Validate required fields
+      if (!fullName || typeof fullName !== 'string' || fullName.trim().length === 0) {
+        return res.status(400).json({ error: 'Full name is required' });
+      }
+      if (!role || !['Artist', 'Label', 'Distributor', 'Manager'].includes(role)) {
+        return res.status(400).json({ error: 'Valid role is required (Artist, Label, Distributor, or Manager)' });
+      }
+      if (acceptedTerms !== true) {
+        return res.status(400).json({ error: 'You must accept the Terms & Conditions' });
+      }
+      if (acceptedPrivacy !== true) {
+        return res.status(400).json({ error: 'You must accept the Privacy Policy' });
+      }
+      
+      const onboardingData: OnboardingData = {
+        fullName: fullName.trim(),
+        role,
+        country: country || undefined,
+        acceptedTerms: true,
+        acceptedPrivacy: true,
+      };
+      
+      const updatedUser = await authStorage.updateOnboarding(userId, onboardingData);
+      res.json({ success: true, user: updatedUser });
+    } catch (error: any) {
+      console.error('Onboarding error:', error);
+      res.status(500).json({ error: 'Failed to complete onboarding' });
+    }
   });
 
   // Claim unclaimed data (for first-time users to claim existing data)

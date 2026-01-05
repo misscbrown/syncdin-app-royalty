@@ -501,9 +501,9 @@ export async function registerRoutes(
   });
 
   // Get all uploaded files
-  app.get('/api/files', async (req, res) => {
+  app.get('/api/files', requireAuth, async (req, res) => {
     try {
-      const files = await storage.getAllUploadedFiles();
+      const files = await storage.getAllUploadedFiles(req.session.userId!);
       res.json(files);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -511,9 +511,9 @@ export async function registerRoutes(
   });
 
   // Get all tracks with stats
-  app.get('/api/tracks', async (req, res) => {
+  app.get('/api/tracks', requireAuth, async (req, res) => {
     try {
-      const tracks = await storage.getTracksWithStats();
+      const tracks = await storage.getTracksWithStats(req.session.userId!);
       res.json(tracks);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -567,9 +567,9 @@ export async function registerRoutes(
   });
 
   // Get all royalty entries
-  app.get('/api/royalties', async (req, res) => {
+  app.get('/api/royalties', requireAuth, async (req, res) => {
     try {
-      const entries = await storage.getAllRoyaltyEntries();
+      const entries = await storage.getAllRoyaltyEntries(req.session.userId!);
       res.json(entries);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -591,9 +591,9 @@ export async function registerRoutes(
   });
 
   // Get tracks with Spotify match status
-  app.get('/api/spotify/tracks', async (req, res) => {
+  app.get('/api/spotify/tracks', requireAuth, async (req, res) => {
     try {
-      const tracks = await storage.getTracksWithSpotifyStatus();
+      const tracks = await storage.getTracksWithSpotifyStatus(req.session.userId!);
       res.json(tracks);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -926,9 +926,9 @@ export async function registerRoutes(
   });
 
   // Get tracks with all integration statuses (Spotify + YouTube)
-  app.get('/api/integrations/tracks', async (req, res) => {
+  app.get('/api/integrations/tracks', requireAuth, async (req, res) => {
     try {
-      const tracks = await storage.getTracksWithIntegrationStatus();
+      const tracks = await storage.getTracksWithIntegrationStatus(req.session.userId!);
       res.json(tracks);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1431,9 +1431,9 @@ export async function registerRoutes(
   // ============================================
 
   // Get all PRS statements
-  app.get('/api/prs-statements', async (req, res) => {
+  app.get('/api/prs-statements', requireAuth, async (req, res) => {
     try {
-      const statements = await storage.getAllPrsStatements();
+      const statements = await storage.getAllPrsStatements(req.session.userId!);
       res.json(statements);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1629,9 +1629,9 @@ export async function registerRoutes(
   });
 
   // Get all works with stats
-  app.get('/api/works', async (req, res) => {
+  app.get('/api/works', requireAuth, async (req, res) => {
     try {
-      const works = await storage.getWorksWithStats();
+      const works = await storage.getWorksWithStats(req.session.userId!);
       res.json(works);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1653,9 +1653,9 @@ export async function registerRoutes(
   });
 
   // Get all performance royalties
-  app.get('/api/performance-royalties', async (req, res) => {
+  app.get('/api/performance-royalties', requireAuth, async (req, res) => {
     try {
-      const royalties = await storage.getAllPerformanceRoyalties();
+      const royalties = await storage.getAllPerformanceRoyalties(req.session.userId!);
       res.json(royalties);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1663,11 +1663,11 @@ export async function registerRoutes(
   });
 
   // Get performance royalties summary (for dashboard)
-  app.get('/api/performance-royalties/summary', async (req, res) => {
+  app.get('/api/performance-royalties/summary', requireAuth, async (req, res) => {
     try {
-      const statements = await storage.getAllPrsStatements();
-      const works = await storage.getWorksWithStats();
-      const allRoyalties = await storage.getAllPerformanceRoyalties();
+      const statements = await storage.getAllPrsStatements(req.session.userId!);
+      const works = await storage.getWorksWithStats(req.session.userId!);
+      const allRoyalties = await storage.getAllPerformanceRoyalties(req.session.userId!);
 
       const totalRoyalties = works.reduce((sum, w) => sum + parseFloat(w.totalRoyalties || '0'), 0);
       const totalPerformances = works.reduce((sum, w) => sum + (w.totalPerformances || 0), 0);
@@ -1697,14 +1697,14 @@ export async function registerRoutes(
   });
 
   // Dashboard API - aggregates all metrics from real data
-  app.get('/api/dashboard', async (req, res) => {
+  app.get('/api/dashboard', requireAuth, async (req, res) => {
     try {
       // Get all data sources
-      const tracks = await storage.getTracksWithStats();
+      const tracks = await storage.getTracksWithStats(req.session.userId!);
       const allIntegrations = await storage.getAllTrackIntegrations();
-      const royaltyEntries = await storage.getAllRoyaltyEntries();
-      const prsStatements = await storage.getAllPrsStatements();
-      const works = await storage.getWorksWithStats();
+      const royaltyEntries = await storage.getAllRoyaltyEntries(req.session.userId!);
+      const prsStatements = await storage.getAllPrsStatements(req.session.userId!);
+      const works = await storage.getWorksWithStats(req.session.userId!);
 
       // Helper for safe number parsing
       const safeNumber = (val: any): number => {
@@ -1842,9 +1842,9 @@ export async function registerRoutes(
   });
 
   // Get all social metrics
-  app.get("/api/social-metrics", async (req, res) => {
+  app.get("/api/social-metrics", requireAuth, async (req, res) => {
     try {
-      const metrics = await storage.getAllSocialMetrics();
+      const metrics = await storage.getAllSocialMetrics(req.session.userId!);
       const quota = await songstatsService.checkQuota();
       res.json({
         metrics,
@@ -1940,7 +1940,7 @@ export async function registerRoutes(
   });
 
   // Refresh all tracks that don't have social metrics yet
-  app.post("/api/social-metrics/refresh-all", async (req, res) => {
+  app.post("/api/social-metrics/refresh-all", requireAuth, async (req, res) => {
     try {
       if (!songstatsService.isConfigured()) {
         return res.status(503).json({ error: "Songstats API not configured" });
@@ -1955,8 +1955,8 @@ export async function registerRoutes(
         });
       }
 
-      const allTracks = await storage.getAllTracks();
-      const existingMetrics = await storage.getAllSocialMetrics();
+      const allTracks = await storage.getAllTracks(req.session.userId!);
+      const existingMetrics = await storage.getAllSocialMetrics(req.session.userId!);
       const existingTrackIds = new Set(existingMetrics.map(m => m.trackId));
       
       const tracksWithoutMetrics = allTracks.filter(t => !existingTrackIds.has(t.id));

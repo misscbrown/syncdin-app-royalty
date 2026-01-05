@@ -330,18 +330,34 @@ export async function registerRoutes(
       res.status(500).json({ message: "Failed to get user" });
     }
   });
+  
+  // Claim unclaimed data (for first-time users to claim existing data)
+  app.post('/api/claim-data', requireAuth, async (req, res) => {
+    try {
+      const result = await storage.claimUnclaimedData(req.session.userId!);
+      res.json({
+        message: "Data claimed successfully",
+        ...result
+      });
+    } catch (error) {
+      console.error('Claim data error:', error);
+      res.status(500).json({ message: "Failed to claim data" });
+    }
+  });
 
   // Upload CSV file
-  app.post('/api/upload', upload.single('file'), async (req, res) => {
+  app.post('/api/upload', requireAuth, upload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
       const fileType = req.body.fileType || 'distributor';
+      const userId = req.session.userId!;
       
-      // Create file record
+      // Create file record with user ownership
       const uploadedFile = await storage.createUploadedFile({
+        userId,
         filename: `${Date.now()}-${req.file.originalname}`,
         originalName: req.file.originalname,
         fileType,
@@ -404,10 +420,11 @@ export async function registerRoutes(
           const isrc = mappedRecord.isrc?.trim();
           if (!isrc) continue;
           
-          // Get or create track
+          // Get or create track with user ownership
           let trackId = processedTracks.get(isrc);
           if (!trackId) {
             const trackData: InsertTrack = {
+              userId,
               isrc,
               title: mappedRecord.title || 'Unknown',
               artist: mappedRecord.artist || 'Unknown',
@@ -1455,16 +1472,18 @@ export async function registerRoutes(
   });
 
   // Upload PRS statement CSV
-  app.post('/api/prs-statements/upload', upload.single('file'), async (req, res) => {
+  app.post('/api/prs-statements/upload', requireAuth, upload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
       const { statementPeriod } = req.body;
+      const userId = req.session.userId!;
 
-      // Create statement record
+      // Create statement record with user ownership
       const statement = await storage.createPrsStatement({
+        userId,
         filename: req.file.originalname,
         originalName: req.file.originalname,
         statementPeriod: statementPeriod || null,
@@ -1553,10 +1572,11 @@ export async function registerRoutes(
         // Skip if no work number
         if (!normalizedRecord.workNo) continue;
 
-        // Get or create work
+        // Get or create work with user ownership
         let workId = workMap.get(normalizedRecord.workNo);
         if (!workId) {
           const work = await storage.upsertWork({
+            userId,
             workNo: normalizedRecord.workNo,
             title: normalizedRecord.workTitle || 'Unknown',
             ip1: normalizedRecord.ip1 || null,

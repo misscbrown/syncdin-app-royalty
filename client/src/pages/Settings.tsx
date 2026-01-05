@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import AppLayout from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { User, Bell, Shield, Palette, Link2, CheckCircle2 } from "lucide-react";
+import { User, Bell, Shield, Palette, Link2, CheckCircle2, Database, Loader2 } from "lucide-react";
 import { SiSpotify, SiSoundcloud, SiYoutube } from "react-icons/si";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface Connection {
   id: string;
@@ -15,6 +18,37 @@ interface Connection {
 }
 
 export default function Settings() {
+  const { toast } = useToast();
+  const [claimResult, setClaimResult] = useState<{
+    tracksUpdated: number;
+    filesUpdated: number;
+    statementsUpdated: number;
+    worksUpdated: number;
+  } | null>(null);
+  
+  const claimDataMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/claim-data");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setClaimResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/tracks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/files"] });
+      toast({
+        title: "Data claimed successfully",
+        description: `${data.tracksUpdated} tracks, ${data.filesUpdated} files, ${data.statementsUpdated} statements, ${data.worksUpdated} works assigned to your account.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to claim data",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
+  
   const [connections, setConnections] = useState<Connection[]>([
     {
       id: "spotify",
@@ -122,6 +156,45 @@ export default function Settings() {
                   )}
                 </div>
               ))}
+            </CardContent>
+          </Card>
+
+          {/* Data Management */}
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold text-foreground flex items-center gap-2">
+                <Database className="w-5 h-5 text-primary" />
+                Data Management
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-foreground">Claim Existing Data</p>
+                  <p className="text-sm text-muted-foreground">
+                    Assign any unclaimed tracks, files, and works to your account
+                  </p>
+                  {claimResult && (
+                    <p className="text-sm text-primary mt-1" data-testid="text-claim-result">
+                      Last claim: {claimResult.tracksUpdated} tracks, {claimResult.filesUpdated} files, {claimResult.statementsUpdated} statements, {claimResult.worksUpdated} works
+                    </p>
+                  )}
+                </div>
+                <Button 
+                  onClick={() => claimDataMutation.mutate()}
+                  disabled={claimDataMutation.isPending}
+                  data-testid="button-claim-data"
+                >
+                  {claimDataMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Claiming...
+                    </>
+                  ) : (
+                    "Claim Data"
+                  )}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 

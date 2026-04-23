@@ -1,202 +1,85 @@
 # **Syncdin – Royalty Intelligence & Metadata Reconciliation Platform**
 
-A modern music-tech system for uncovering missing royalties, matching metadata, and unifying royalty data across fragmented sources.
-
-
-## 🚀 **Overview**
-
-Syncdin is a music royalty intelligence platform designed to help artists, publishers, and rights holders recover lost income by analysing metadata, royalty statements, and streaming data.
-
-The platform focuses on:
-
-Metadata extraction & matching
-
-Royalty statement ingestion (CSV/Excel)
-
-Flagging anomalies, mismatches, and missing royalties
-
-Playback analytics & trend reporting
-
-Cross-platform metadata consistency
-
-Syncdin is being developed sprint-by-sprint in Replit with a long-term vision of pulling data from distributors, DSPs, and public sources to provide a complete financial picture for creators.
-
-
-## ✔️ **Current MVP Functionality (Sprints 1–3)**
-🎨 UI / Dashboard
-
-Spotify-inspired dark theme
-
-Dashboard with:
-
-Total streams
-
-Total royalties
-
-Unmatched metadata
-
-Missing royalties
-
-Flagged royalties
-
-New matches
-
-Charts for playback, royalty gaps, metadata health
-
-
-## 📁 **File Ingestion**
-
-CSV uploader
-
-Reads distributor reports
-
-Parses rows
-
-Extracts core fields
-
-ISRC
-
-Track Title
-
-Artist
-
-Plays
-
-Revenue
-
-Stores data in local mock database
-
-
-## 🧩 **Metadata Matching**
-
-Page to view unmatched / partially matched metadata
-
-Confidence scoring (placeholder)
-
-“Run Matching” action
-
-Placeholder logic for:
-
-Duplicate detection
-
-Missing identifiers
-
-Title variations
-
-Fuzzy matching
-
-
-## 💸 **Missing Royalty Detection**
-
-Identifies tracks with:
-
-Missing payouts
-
-Zero-revenue anomalies
-
-Play-count inconsistencies
-
-
-## 📊 **Playback Analytics**
-
-Stream trends
-
-Platform distribution
-
-Active tracks
-
-Monthly averages
-
-
-## 📑 **Reports & Exports**
-
-Royalty report
-
-Metadata report
-
-Streaming report
-
-Financial summary
-
-Export history list
-
-
-## ⚙️ **Settings**
-
-Profile
-
-Notifications
-
-Appearance
-
-Security
-
-
-## 🛠️ **Tech Stack**
-
-React + TypeScript
-
-TailwindCSS (with full custom design tokens)
-
-Recharts for charts
-
-Replit + GitHub for dev workflow
-
-CSV parsing using Papaparse / custom utilities
-
-
-## 🧭 **Product Roadmap**
-**Sprint 4: Metadata Extraction (APIs)**
-
-Spotify API (ISRC, ISWC, titles, aliases)
-
-Genius / MusicBrainz metadata enrichment
-
-Record of truth: build structured metadata dataset
-
-**Sprint 5: Royalty Comparison Engine**
-
-Compare distributor files vs enriched metadata
-
-Detect:
-
-Missing ISRC
-
-Incorrect track titles
-
-Unallocated royalties
-
-Inconsistent reporting across pay sources
-
-**Sprint 6: Audio Fingerprinting (Optional)**
-
-Integration with ACRCloud for track identification
-
-Audio sample uploader
-
-Match metadata from audio file
-
-Automate correction of missing identifiers
-
-**Sprint 7: DSP + Rights Organisation Integrations**
-
-MLC API
-
-YouTube Data API
-
-TikTok / Meta rights endpoints
-
-Radio tracking providers (Radiomonitor, BMAT if allowed)
-
-**Sprint 8: Royalty Intelligence Engine**
-
-Cross-source royalty reconciliation
-
-Predictive modelling for missing royalties
-
-Forecasting payouts
-
-Alerting system for anomalies
+**Syncd:in**
+
+Syncd:in is a music publishing and sync licensing platform that connects artists, managers, and brands. It gives artists and their managers a single place to register songs, track royalties, and apply for sync opportunities — while giving brands a streamlined way to post briefs and find the right music.
+
+**Who is it for?**
+The platform has four user types, each with their own dashboard and feature set.
+
+**Artists**
+Independent artists who self-manage their catalog and earnings.
+
+Register songs with full metadata (genre, mood, BPM, ISRC, collaborators, writer splits)
+View royalty statements uploaded by Syncd:in
+Track earnings by track and by platform
+Submit live performance (gig) records
+Manage their PRO membership and CAE/IPI details
+
+**Managers**
+Music managers overseeing one or more artists.
+
+Add and manage a roster of artists (linked via Spotify)
+View and manage songs across all managed artists
+Submit live performance records on behalf of artists
+Access aggregated royalty statements per artist
+Apply for sync opportunities on behalf of artists (feature-flagged, currently disabled by default)
+
+**Brands**
+Companies and creative agencies looking for music to license.
+
+Post sync briefs (project type, genre, mood, budget, deadline)
+Review applications from artists
+Shortlist, accept, or reject applicants
+Message artists directly through the platform
+
+**Admins**
+Syncd:in internal team members with full platform access.
+
+Manage all users, songs, and gigs
+Upload royalty statement CSVs — parsed and distributed to artists automatically
+Export song catalogs as CWR-ready CSVs
+Manage terms and conditions documents per role
+Manage PRO user onboarding checklists
+Impersonate any user role for support and QA
+Broadcast messages to all platform users
+
+**Key Features**
+Song registration — full metadata capture including collaborators, writer designations, and publisher splits
+CWR-ready CSV export — admin can export the full catalog in the correct column order for CWR submission
+Royalty ingestion — admin uploads CSV/Excel statements; rows are parsed, deduplicated (via row hash), and made visible to artists
+Sync opportunities (Gigs) — brands post briefs; artists apply with tracks and cover notes
+Live performance records — artists and managers submit setlists, venue details, and audience data
+Messaging — threaded internal messaging between all user types, with unread counts
+Notifications — in-app notification centre for gig updates, statement drops, and system messages
+Legal agreements — role-specific terms are versioned and signed during onboarding, with PDF export
+Stripe subscriptions — PRO tier for artists; subscription status tracked per user
+Spotify integration — artist and track metadata fetched directly from Spotify during onboarding and song registration
+Progressive Web App — installable on desktop and mobile; shell cached offline
+
+**Tech Stack**
+Layer	Technology
+Frontend	React 19, TypeScript, Vite
+Styling	Tailwind CSS v4, shadcn/ui
+Routing	Wouter
+Server state	TanStack React Query
+Backend	Node.js, Express.js, TypeScript
+Database	PostgreSQL, Drizzle ORM
+Auth	Clerk (OIDC)
+Payments	Stripe
+Email	Resend
+Music data	Spotify Web API
+PWA	vite-plugin-pwa (Workbox)
+
+**For Developers**
+See DEVELOPER.md for local setup instructions, environment variables, API route reference, database schema, and architecture details.
+
+**Getting Started**
+Visit the live platform at syncdin.app and sign up. During signup you will be asked to choose a role — artist, manager, or brand. Each role has its own onboarding flow that collects the information relevant to you.
+
+If you are joining as an artist managed by a Syncd:in manager, your manager will add you to the platform and you will receive an invitation.
+
+For access to the admin dashboard, contact the Syncd:in team directly.
 
 
 ## 🔮 **Long-Term Vision**
